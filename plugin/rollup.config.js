@@ -4,7 +4,7 @@ export default {
     {
       file: 'dist/plugin.js',
       format: 'iife',
-      name: 'capacitorCapacitorGoogleMaps',
+      name: 'capacitorCapacitorA1GoogleMaps',
       globals: {
         '@capacitor/core': 'capacitorExports',
       },

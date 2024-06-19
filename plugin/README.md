@@ -1,3 +1,5 @@
+https://github.com/ionic-team/capacitor-google-maps/issues/29
+
 # @capacitor/google-maps
 
 Google maps on Capacitor
@@ -24,6 +26,7 @@ Read about [Configuring `Info.plist`](https://capacitorjs.com/docs/ios/configura
 ### Minimum Deployment Target
 
 Version 6 of this plugin has a minimum deployment target of iOS 14.0. You will need to edit `ios/App/Podfile` and change the following line from 13.0 to 14.0:
+
 ```
 platform :ios, '14.0'
 ```
@@ -35,6 +38,7 @@ Additionally, you will need to open your project in XCode and in the `Build Sett
 Your project will also need have `skipLibCheck` set to `true` in `tsconfig.json`.
 
 ### Migrating from older versions
+
 > The main Google Maps SDK now supports running on simulators on Apple Silicon Macs, but make sure you have the latest version of [Google-Maps-iOS-Utils](https://github.com/googlemaps/google-maps-ios-utils) installed.
 
 If you added the previous workaround for getting the unreleased version, you can delete it now by removing this line from `ios/App/Podfile`:
@@ -76,7 +80,6 @@ This plugin will use the following project variables (defined in your app's `var
 - `kotlinxCoroutinesVersion`: version of `org.jetbrains.kotlinx:kotlinx-coroutines-android` and `org.jetbrains.kotlinx:kotlinx-coroutines-core` (default: `1.7.3`)
 - `androidxCoreKTXVersion`: version of `androidx.core:core-ktx` (default: `1.12.0`)
 - `kotlin_version`: version of `org.jetbrains.kotlin:kotlin-stdlib` (default: `1.9.10`)
-
 
 ## Usage
 
