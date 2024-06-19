@@ -1,8 +1,10 @@
 package com.capacitorjs.plugins.googlemaps
 
+import android.R.id.input
 import android.annotation.SuppressLint
 import android.graphics.*
 import android.location.Location
+import android.util.Base64
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
@@ -393,6 +395,7 @@ class CapacitorGoogleMap(
                             this@CapacitorGoogleMap.buildMarker(marker)
                         }
                 val googleMapMarker = googleMap?.addMarker(markerOptions.await())
+                googleMapMarker?.showInfoWindow()
 
                 marker.googleMapMarker = googleMapMarker
 
@@ -940,13 +943,19 @@ class CapacitorGoogleMap(
                 markerOptions.icon(getResizedIcon(cachedBitmap!!, marker))
             } else {
                 try {
-                    var stream: InputStream? = null
-                    if (marker.iconUrl!!.startsWith("https:")) {
-                        stream = URL(marker.iconUrl).openConnection().getInputStream()
+                    var bitmap: Bitmap? = null
+                    if (marker.iconUrl!!.contains(";base64,")) {
+                        val decodedString: ByteArray = Base64.decode(marker.iconUrl!!.split(";base64,")[1], Base64.DEFAULT)
+                        bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
                     } else {
-                        stream = this.delegate.context.assets.open("public/${marker.iconUrl}")
+                        var stream: InputStream? = null
+                        if (marker.iconUrl!!.startsWith("https:")) {
+                            stream = URL(marker.iconUrl).openConnection().getInputStream()
+                        } else {
+                            stream = this.delegate.context.assets.open("public/${marker.iconUrl}")
+                        }
+                        bitmap = BitmapFactory.decodeStream(stream)
                     }
-                    var bitmap = BitmapFactory.decodeStream(stream)
                     this.markerIcons[marker.iconUrl!!] = bitmap
                     markerOptions.icon(getResizedIcon(bitmap, marker))
                 } catch (e: Exception) {

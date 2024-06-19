@@ -34,6 +34,7 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
     private var cachedTouchEvents: HashMap<String, MutableList<MotionEvent>> = HashMap()
     private val tag: String = "CAP-GOOGLE-MAPS"
     private var touchEnabled: HashMap<String, Boolean> = HashMap()
+    private var hasTouchStartedOnMap: Boolean = false
 
     companion object {
         const val LOCATION = "location"
@@ -63,12 +64,18 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
                                 }
                                 val mapRect = map.getMapBounds()
                                 if (mapRect.contains(touchX.toInt(), touchY.toInt())) {
-                                    if (event.action == MotionEvent.ACTION_DOWN) {
-                                        if (cachedTouchEvents[id] == null) {
-                                            cachedTouchEvents[id] = mutableListOf<MotionEvent>()
+                                    checkHasTouchStartedOnMap(event);
+                                    when (event.action) {
+                                        MotionEvent.ACTION_UP -> {
+                                            hasTouchStartedOnMap = false
                                         }
-
-                                        cachedTouchEvents[id]?.clear()
+                                        MotionEvent.ACTION_DOWN -> {
+                                            hasTouchStartedOnMap = true
+                                            if (cachedTouchEvents[id] == null) {
+                                                cachedTouchEvents[id] = mutableListOf<MotionEvent>()
+                                            }
+                                            cachedTouchEvents[id]?.clear()
+                                        }
                                     }
 
                                     val motionEvent = MotionEvent.obtain(event)
@@ -81,6 +88,8 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
 
                                     notifyListeners("isMapInFocus", payload)
                                     return true
+                                } else {
+                                    hasTouchStartedOnMap = false
                                 }
                             }
                         }
@@ -890,11 +899,12 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
                 while(events.size > 0) {
                     val event = events.first()
                     if (focus) {
+                        checkHasTouchStartedOnMap(event, true)
                         map.dispatchTouchEvent(event)
                     } else {
                         this.bridge.webView.onTouchEvent(event)
                     }
-                    events.removeFirst()
+                    events.removeAt(0)
                 }
             }
 
@@ -992,6 +1002,22 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
             handleError(call, e)
         } catch (e: Exception) {
             handleError(call, e)
+        }
+    }
+
+    private fun checkHasTouchStartedOnMap(event: MotionEvent, force: Boolean = false) {
+        if (event.action == MotionEvent.ACTION_MOVE && (!hasTouchStartedOnMap || force)) {
+            hasTouchStartedOnMap = true
+            this.bridge.webView?.onTouchEvent(
+                MotionEvent.obtain(
+                    event.downTime,
+                    event.eventTime,
+                    MotionEvent.ACTION_CANCEL,
+                    event.x,
+                    event.y,
+                    event.metaState
+                )
+            )
         }
     }
 
