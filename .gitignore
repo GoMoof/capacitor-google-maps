@@ -5,3 +5,4 @@ Podfile.lock
 Package.resolved
 .env
 test.sh
+.idea

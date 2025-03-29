@@ -1,5 +1,5 @@
 {
-  "name": "@capacitor/google-maps",
+  "name": "@gomoof/google-maps",
   "version": "7.0.1",
   "description": "Google maps on Capacitor",
   "main": "dist/plugin.cjs.js",
