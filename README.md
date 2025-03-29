@@ -5,7 +5,7 @@ Google maps on Capacitor
 ## Install
 
 ```bash
-npm install @capacitor/google-maps
+npm install github:GoMoof/capacitor-google-maps --save @gomoof/google-maps
 npx cap sync
 ```
 
