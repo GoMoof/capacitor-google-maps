@@ -139,9 +139,21 @@ var capacitorCapacitorGoogleMaps = (function (exports, core, markerclusterer) {
                     ionicPage.addEventListener('ionViewWillEnter', () => {
                         setTimeout(() => {
                             onDisplay();
+                        }, 15);
+                        setTimeout(() => {
+                            onDisplay();
+                        }, 30);
+                        setTimeout(() => {
+                            onDisplay();
                         }, 100);
                     });
                     ionicPage.addEventListener('ionViewDidEnter', () => {
+                        setTimeout(() => {
+                            onDisplay();
+                        }, 15);
+                        setTimeout(() => {
+                            onDisplay();
+                        }, 30);
                         setTimeout(() => {
                             onDisplay();
                         }, 100);
