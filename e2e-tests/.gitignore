@@ -27,6 +27,6 @@ yarn-error.log*
 # Optional eslint cache
 .eslintcache
 
-.ionic/*
+.ionic/e2e.env
 !.ionic/e2e.env
 !.ionic/wdio.config.ts
