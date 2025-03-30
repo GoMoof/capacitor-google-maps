@@ -2,20 +2,16 @@ import { WebPlugin } from '@capacitor/core';
 import type { Cluster, onClusterClickHandler } from '@googlemaps/markerclusterer';
 import { MarkerClusterer, SuperClusterAlgorithm } from '@googlemaps/markerclusterer';
 
-import type { Marker } from './definitions';
-import { MapType, LatLngBounds } from './definitions';
+import type { LatLngBoundsInterface, LatLng, Marker, MapPadding, GoogleMapConfig } from './definitions';
+import { FeatureType, LatLngBounds } from './definitions';
 import type {
   AddMarkerArgs,
   CameraArgs,
   AddMarkersArgs,
   CapacitorGoogleMapsPlugin,
   CreateMapArgs,
-  CurrentLocArgs,
   DestroyMapArgs,
-  MapTypeArgs,
-  PaddingArgs,
   RemoveMarkerArgs,
-  TrafficLayerArgs,
   RemoveMarkersArgs,
   MapBoundsContainsArgs,
   EnableClusteringArgs,
@@ -27,32 +23,36 @@ import type {
   RemoveCirclesArgs,
   AddPolylinesArgs,
   RemovePolylinesArgs,
+  UpdateMapArgs,
+  AddFeatureArgs,
+  GetFeatureBoundsArgs,
+  RemoveFeatureArgs,
 } from './implementation';
 
+class MapInstance {
+  element!: HTMLElement;
+  map!: google.maps.Map;
+  markers: {
+    [id: string]: google.maps.marker.AdvancedMarkerElement;
+  } = {};
+  polygons: {
+    [id: string]: google.maps.Polygon;
+  } = {};
+  circles: {
+    [id: string]: google.maps.Circle;
+  } = {};
+  polylines: {
+    [id: string]: google.maps.Polyline;
+  } = {};
+  markerClusterer?: MarkerClusterer;
+  trafficLayer?: google.maps.TrafficLayer;
+}
+
 export class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogleMapsPlugin {
-  private gMapsRef: typeof google.maps | undefined = undefined;
+  private gMapsRef: google.maps.MapsLibrary | undefined = undefined;
   private AdvancedMarkerElement: typeof google.maps.marker.AdvancedMarkerElement | undefined = undefined;
   private PinElement: typeof google.maps.marker.PinElement | undefined = undefined;
-  private maps: {
-    [id: string]: {
-      element: HTMLElement;
-      map: google.maps.Map;
-      markers: {
-        [id: string]: google.maps.marker.AdvancedMarkerElement;
-      };
-      polygons: {
-        [id: string]: google.maps.Polygon;
-      };
-      circles: {
-        [id: string]: google.maps.Circle;
-      };
-      polylines: {
-        [id: string]: google.maps.Polyline;
-      };
-      markerClusterer?: MarkerClusterer;
-      trafficLayer?: google.maps.TrafficLayer;
-    };
-  } = {};
+  private maps: { [id: string]: MapInstance } = {};
   private currMarkerId = 0;
   private currPolygonId = 0;
   private currCircleId = 0;
@@ -119,12 +119,10 @@ export class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogle
       const loader = new lib.Loader({
         apiKey: apiKey ?? '',
         version: 'weekly',
-        libraries: ['places'],
         language,
         region,
       });
-      const google = await loader.load();
-      this.gMapsRef = google.maps;
+      this.gMapsRef = await loader.importLibrary('maps');
 
       // Import marker library once
       const { AdvancedMarkerElement, PinElement } = (await google.maps.importLibrary(
@@ -155,80 +153,8 @@ export class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogle
     });
   }
 
-  async getMapType(_args: { id: string }): Promise<{ type: string }> {
-    let type = this.maps[_args.id].map.getMapTypeId();
-    if (type !== undefined) {
-      if (type === 'roadmap') {
-        type = MapType.Normal;
-      }
-      return { type: `${type.charAt(0).toUpperCase()}${type.slice(1)}` };
-    }
-    throw new Error('Map type is undefined');
-  }
-
-  async setMapType(_args: MapTypeArgs): Promise<void> {
-    let mapType = _args.mapType.toLowerCase();
-    if (_args.mapType === MapType.Normal) {
-      mapType = 'roadmap';
-    }
-    this.maps[_args.id].map.setMapTypeId(mapType);
-  }
-
-  async enableIndoorMaps(): Promise<void> {
-    throw new Error('Method not supported on web.');
-  }
-
-  async enableTrafficLayer(_args: TrafficLayerArgs): Promise<void> {
-    const trafficLayer = this.maps[_args.id].trafficLayer ?? new google.maps.TrafficLayer();
-
-    if (_args.enabled) {
-      trafficLayer.setMap(this.maps[_args.id].map);
-      this.maps[_args.id].trafficLayer = trafficLayer;
-    } else if (this.maps[_args.id].trafficLayer) {
-      trafficLayer.setMap(null);
-      this.maps[_args.id].trafficLayer = undefined;
-    }
-  }
-
-  async enableAccessibilityElements(): Promise<void> {
-    throw new Error('Method not supported on web.');
-  }
-
   dispatchMapEvent(): Promise<void> {
     throw new Error('Method not supported on web.');
-  }
-
-  async enableCurrentLocation(_args: CurrentLocArgs): Promise<void> {
-    if (_args.enabled) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position: GeolocationPosition) => {
-            const pos = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            };
-
-            this.maps[_args.id].map.setCenter(pos);
-
-            this.notifyListeners('onMyLocationButtonClick', {});
-
-            this.notifyListeners('onMyLocationClick', {});
-          },
-          () => {
-            throw new Error('Geolocation not supported on web browser.');
-          }
-        );
-      } else {
-        throw new Error('Geolocation not supported on web browser.');
-      }
-    }
-  }
-  async setPadding(_args: PaddingArgs): Promise<void> {
-    const bounds = this.maps[_args.id].map.getBounds();
-
-    if (bounds !== undefined) {
-      this.maps[_args.id].map.fitBounds(bounds, _args.padding);
-    }
   }
 
   async getMapBounds(_args: { id: string }): Promise<LatLngBounds> {
@@ -397,6 +323,79 @@ export class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogle
     }
   }
 
+  async addFeatures(args: AddFeatureArgs): Promise<{ ids: string[] }> {
+    const featureIds: string[] = [];
+    const map = this.maps[args.id];
+
+    if (args.type === FeatureType.GeoJSON) {
+      featureIds.push(
+        ...(map.map.data
+          .addGeoJson(args.data, args.idPropertyName ? { idPropertyName: args.idPropertyName } : null)
+          .map((f) => f.getId())
+          .filter((f) => f !== undefined)
+          .map((f) => f?.toString()) as string[])
+      );
+    } else {
+      const featureId = map.map.data.add(args.data).getId();
+      if (featureId) {
+        featureIds.push(featureId.toString());
+      }
+    }
+
+    if (args.styles) {
+      map.map.data.setStyle((feature) => {
+        const featureId = feature.getId();
+        return featureId ? (args.styles?.[featureId] as any) : null;
+      });
+    }
+
+    return {
+      ids: featureIds,
+    };
+  }
+
+  async getFeatureBounds(args: GetFeatureBoundsArgs): Promise<{ bounds: LatLngBounds }> {
+    if (!args.featureId) {
+      throw new Error('Feature id not set.');
+    }
+
+    const map = this.maps[args.id];
+    const feature = map.map.data.getFeatureById(args.featureId);
+
+    if (!feature) {
+      throw new Error(`Feature '${args.featureId}' could not be found.`);
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+
+    feature?.getGeometry()?.forEachLatLng((latLng) => {
+      bounds.extend(latLng);
+    });
+
+    return {
+      bounds: new LatLngBounds({
+        southwest: bounds.getSouthWest().toJSON() as LatLng,
+        center: bounds.getCenter().toJSON() as LatLng,
+        northeast: bounds.getNorthEast().toJSON() as LatLng,
+      } as LatLngBoundsInterface),
+    };
+  }
+
+  async removeFeature(args: RemoveFeatureArgs): Promise<void> {
+    if (!args.featureId) {
+      throw new Error('Feature id not set.');
+    }
+
+    const map = this.maps[args.id];
+
+    const feature = map.map.data.getFeatureById(args.featureId);
+    if (!feature) {
+      throw new Error(`Feature '${args.featureId}' could not be found.`);
+    }
+
+    map.map.data.remove(feature);
+  }
+
   async enableClustering(_args: EnableClusteringArgs): Promise<void> {
     const markers: google.maps.marker.AdvancedMarkerElement[] = [];
 
@@ -450,7 +449,7 @@ export class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogle
       config.mapId = `capacitor_map_${this.currMapId++}`;
     }
 
-    this.maps[_args.id] = {
+    const mapInstance = {
       map: new window.google.maps.Map(_args.element, config),
       element: _args.element,
       markers: {},
@@ -458,7 +457,82 @@ export class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogle
       circles: {},
       polylines: {},
     };
+    this.applyConfig(mapInstance, config);
+    this.maps[_args.id] = mapInstance;
     this.setMapListeners(_args.id);
+  }
+
+  async update(_args: UpdateMapArgs): Promise<void> {
+    const mapInstance = this.maps[_args.id];
+    mapInstance.map.setOptions(_args.config);
+
+    this.applyConfig(mapInstance, _args.config);
+  }
+
+  private applyConfig(mapInstance: MapInstance, config: GoogleMapConfig): void {
+    if (config.isMyLocationEnabled) {
+      this.enableMyLocation(mapInstance);
+    }
+
+    if (config.isTrafficLayerEnabled !== undefined) {
+      this.setTrafficLayer(mapInstance, config.isTrafficLayerEnabled);
+    }
+
+    if (config.mapTypeId !== undefined) {
+      this.setMapTypeId(mapInstance, config.mapTypeId as string);
+    }
+
+    if (config.padding !== undefined) {
+      this.setPadding(mapInstance, config.padding);
+    }
+  }
+
+  private enableMyLocation(mapInstance: MapInstance): void {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position: GeolocationPosition) => {
+          const pos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+
+          mapInstance.map.setCenter(pos);
+
+          this.notifyListeners('onMyLocationButtonClick', {});
+
+          this.notifyListeners('onMyLocationClick', {});
+        },
+        () => {
+          throw new Error('Geolocation not supported on web browser.');
+        }
+      );
+    } else {
+      throw new Error('Geolocation not supported on web browser.');
+    }
+  }
+
+  private setTrafficLayer(mapInstance: MapInstance, enabled: boolean): void {
+    const trafficLayer = mapInstance.trafficLayer ?? new google.maps.TrafficLayer();
+
+    if (enabled) {
+      trafficLayer.setMap(mapInstance.map);
+      mapInstance.trafficLayer = trafficLayer;
+    } else if (mapInstance.trafficLayer) {
+      trafficLayer.setMap(null);
+      mapInstance.trafficLayer = undefined;
+    }
+  }
+
+  private setMapTypeId(mapInstance: MapInstance, typeId: string): void {
+    mapInstance.map.setMapTypeId(typeId);
+  }
+
+  private setPadding(mapInstance: MapInstance, padding: MapPadding): void {
+    const bounds = mapInstance.map.getBounds();
+
+    if (bounds !== undefined) {
+      mapInstance.map.fitBounds(bounds, padding);
+    }
   }
 
   async destroy(_args: DestroyMapArgs): Promise<void> {

@@ -1,3 +1,5 @@
+https://github.com/ionic-team/capacitor-google-maps/issues/29
+
 # @capacitor/google-maps
 
 Google maps on Capacitor
@@ -24,6 +26,7 @@ Read about [Configuring `Info.plist`](https://capacitorjs.com/docs/ios/configura
 ### Minimum Deployment Target
 
 Version 6 of this plugin has a minimum deployment target of iOS 14.0. You will need to edit `ios/App/Podfile` and change the following line from 13.0 to 14.0:
+
 ```
 platform :ios, '14.0'
 ```
@@ -35,6 +38,7 @@ Additionally, you will need to open your project in XCode and in the `Build Sett
 Your project will also need have `skipLibCheck` set to `true` in `tsconfig.json`.
 
 ### Migrating from older versions
+
 > The main Google Maps SDK now supports running on simulators on Apple Silicon Macs, but make sure you have the latest version of [Google-Maps-iOS-Utils](https://github.com/googlemaps/google-maps-ios-utils) installed.
 
 If you added the previous workaround for getting the unreleased version, you can delete it now by removing this line from `ios/App/Podfile`:
@@ -76,7 +80,6 @@ This plugin will use the following project variables (defined in your app's `var
 - `kotlinxCoroutinesVersion`: version of `org.jetbrains.kotlinx:kotlinx-coroutines-android` and `org.jetbrains.kotlinx:kotlinx-coroutines-core` (default: `1.7.3`)
 - `androidxCoreKTXVersion`: version of `androidx.core:core-ktx` (default: `1.12.0`)
 - `kotlin_version`: version of `org.jetbrains.kotlin:kotlin-stdlib` (default: `1.9.10`)
-
 
 ## Usage
 
@@ -296,6 +299,8 @@ export default MyMap;
 <docgen-index>
 
 * [`create(...)`](#create)
+* [`update(...)`](#update)
+* [`getOptions()`](#getoptions)
 * [`enableTouch()`](#enabletouch)
 * [`disableTouch()`](#disabletouch)
 * [`enableClustering(...)`](#enableclustering)
@@ -310,6 +315,9 @@ export default MyMap;
 * [`removeCircles(...)`](#removecircles)
 * [`addPolylines(...)`](#addpolylines)
 * [`removePolylines(...)`](#removepolylines)
+* [`addFeatures(...)`](#addfeatures)
+* [`getFeatureBounds(...)`](#getfeaturebounds)
+* [`removeFeature(...)`](#removefeature)
 * [`destroy()`](#destroy)
 * [`setCamera(...)`](#setcamera)
 * [`getMapType()`](#getmaptype)
@@ -358,6 +366,30 @@ create(options: CreateMapArgs, callback?: MapListenerCallback<MapReadyCallbackDa
 | **`callback`** | <code><a href="#maplistenercallback">MapListenerCallback</a>&lt;<a href="#mapreadycallbackdata">MapReadyCallbackData</a>&gt;</code> |
 
 **Returns:** <code>Promise&lt;GoogleMap&gt;</code>
+
+--------------------
+
+
+### update(...)
+
+```typescript
+update(config: GoogleMapConfig) => Promise<void>
+```
+
+| Param        | Type                                                        |
+| ------------ | ----------------------------------------------------------- |
+| **`config`** | <code><a href="#googlemapconfig">GoogleMapConfig</a></code> |
+
+--------------------
+
+
+### getOptions()
+
+```typescript
+getOptions() => GoogleMapConfig | null
+```
+
+**Returns:** <code><a href="#googlemapconfig">GoogleMapConfig</a> | null</code>
 
 --------------------
 
@@ -538,6 +570,52 @@ removePolylines(ids: string[]) => Promise<void>
 | Param     | Type                  |
 | --------- | --------------------- |
 | **`ids`** | <code>string[]</code> |
+
+--------------------
+
+
+### addFeatures(...)
+
+```typescript
+addFeatures(type: FeatureType, data: any, idPropertyName?: string | undefined, styles?: FeatureStyles | undefined) => Promise<string[]>
+```
+
+| Param                | Type                                                    |
+| -------------------- | ------------------------------------------------------- |
+| **`type`**           | <code><a href="#featuretype">FeatureType</a></code>     |
+| **`data`**           | <code>any</code>                                        |
+| **`idPropertyName`** | <code>string</code>                                     |
+| **`styles`**         | <code><a href="#featurestyles">FeatureStyles</a></code> |
+
+**Returns:** <code>Promise&lt;string[]&gt;</code>
+
+--------------------
+
+
+### getFeatureBounds(...)
+
+```typescript
+getFeatureBounds(featureId: string) => Promise<LatLngBounds>
+```
+
+| Param           | Type                |
+| --------------- | ------------------- |
+| **`featureId`** | <code>string</code> |
+
+**Returns:** <code>Promise&lt;LatLngBounds&gt;</code>
+
+--------------------
+
+
+### removeFeature(...)
+
+```typescript
+removeFeature(featureId: string) => Promise<void>
+```
+
+| Param           | Type                |
+| --------------- | ------------------- |
+| **`featureId`** | <code>string</code> |
 
 --------------------
 
@@ -899,37 +977,43 @@ setOnMyLocationClickListener(callback?: MapListenerCallback<MapClickCallbackData
 
 An interface containing the options used when creating a map.
 
-| Prop              | Type                                                        | Description                                                                                                                                                                            | Default            |
-| ----------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| **`id`**          | <code>string</code>                                         | A unique identifier for the map instance.                                                                                                                                              |                    |
-| **`apiKey`**      | <code>string</code>                                         | The Google Maps SDK API Key.                                                                                                                                                           |                    |
-| **`config`**      | <code><a href="#googlemapconfig">GoogleMapConfig</a></code> | The initial configuration settings for the map.                                                                                                                                        |                    |
-| **`element`**     | <code>HTMLElement</code>                                    | The DOM element that the Google Map View will be mounted on which determines size and positioning.                                                                                     |                    |
-| **`forceCreate`** | <code>boolean</code>                                        | Destroy and re-create the map instance if a map with the supplied id already exists                                                                                                    | <code>false</code> |
-| **`region`**      | <code>string</code>                                         | The region parameter alters your application to serve different map tiles or bias the application (such as biasing geocoding results towards the region). Only available for web.      |                    |
-| **`language`**    | <code>string</code>                                         | The language parameter affects the names of controls, copyright notices, driving directions, and control labels, as well as the responses to service requests. Only available for web. |                    |
+| Prop              | Type                                                                    | Description                                                                                                                                                                            | Default            |
+| ----------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| **`id`**          | <code>string</code>                                                     | A unique identifier for the map instance.                                                                                                                                              |                    |
+| **`apiKey`**      | <code>string</code>                                                     | The Google Maps SDK API Key.                                                                                                                                                           |                    |
+| **`config`**      | <code><a href="#googlemapcreateconfig">GoogleMapCreateConfig</a></code> | The initial configuration settings for the map.                                                                                                                                        |                    |
+| **`element`**     | <code>HTMLElement</code>                                                | The DOM element that the Google Map View will be mounted on which determines size and positioning.                                                                                     |                    |
+| **`forceCreate`** | <code>boolean</code>                                                    | Destroy and re-create the map instance if a map with the supplied id already exists                                                                                                    | <code>false</code> |
+| **`region`**      | <code>string</code>                                                     | The region parameter alters your application to serve different map tiles or bias the application (such as biasing geocoding results towards the region). Only available for web.      |                    |
+| **`language`**    | <code>string</code>                                                     | The language parameter affects the names of controls, copyright notices, driving directions, and control labels, as well as the responses to service requests. Only available for web. |                    |
 
 
-#### GoogleMapConfig
+#### GoogleMapCreateConfig
 
 For web, all the javascript Google Maps options are available as
-GoogleMapConfig extends google.maps.MapOptions.
-For iOS and Android only the config options declared on <a href="#googlemapconfig">GoogleMapConfig</a> are available.
+GoogleMapCreateConfig extends google.maps.MapOptions.
+For iOS and Android the following options from google.maps.MapOptions with the same signature are additionally available:
+- gestureHandling ('none' | 'auto')
+- mapTypeId
+- maxZoom
+- minZoom
+- restriction
+- styles
+- zoom
 
-| Prop                   | Type                                      | Description                                                                                                                                               | Default            | Since |
-| ---------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----- |
-| **`width`**            | <code>number</code>                       | Override width for native map.                                                                                                                            |                    |       |
-| **`height`**           | <code>number</code>                       | Override height for native map.                                                                                                                           |                    |       |
-| **`x`**                | <code>number</code>                       | Override absolute x coordinate position for native map.                                                                                                   |                    |       |
-| **`y`**                | <code>number</code>                       | Override absolute y coordinate position for native map.                                                                                                   |                    |       |
-| **`center`**           | <code><a href="#latlng">LatLng</a></code> | Default location on the Earth towards which the camera points.                                                                                            |                    |       |
-| **`zoom`**             | <code>number</code>                       | Sets the zoom of the map.                                                                                                                                 |                    |       |
-| **`androidLiteMode`**  | <code>boolean</code>                      | Enables image-based lite mode on Android.                                                                                                                 | <code>false</code> |       |
-| **`devicePixelRatio`** | <code>number</code>                       | Override pixel ratio for native map.                                                                                                                      |                    |       |
-| **`styles`**           | <code>MapTypeStyle[] \| null</code>       | Styles to apply to each of the default map types. Note that for satellite, hybrid and terrain modes, these styles will only apply to labels and geometry. |                    | 4.3.0 |
-| **`mapId`**            | <code>string</code>                       | A map id associated with a specific map style or feature. [Use Map IDs](https://developers.google.com/maps/documentation/get-map-id) Only for Web.        |                    | 5.4.0 |
-| **`androidMapId`**     | <code>string</code>                       | A map id associated with a specific map style or feature. [Use Map IDs](https://developers.google.com/maps/documentation/get-map-id) Only for Android.    |                    | 5.4.0 |
-| **`iOSMapId`**         | <code>string</code>                       | A map id associated with a specific map style or feature. [Use Map IDs](https://developers.google.com/maps/documentation/get-map-id) Only for iOS.        |                    | 5.4.0 |
+| Prop                   | Type                                      | Description                                                                                                                                            | Default            | Since |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ | ----- |
+| **`width`**            | <code>number</code>                       | Override width for native map.                                                                                                                         |                    |       |
+| **`height`**           | <code>number</code>                       | Override height for native map.                                                                                                                        |                    |       |
+| **`x`**                | <code>number</code>                       | Override absolute x coordinate position for native map.                                                                                                |                    |       |
+| **`y`**                | <code>number</code>                       | Override absolute y coordinate position for native map.                                                                                                |                    |       |
+| **`center`**           | <code><a href="#latlng">LatLng</a></code> | Default location on the Earth towards which the camera points.                                                                                         |                    |       |
+| **`zoom`**             | <code>number</code>                       | Sets the zoom of the map.                                                                                                                              |                    |       |
+| **`androidLiteMode`**  | <code>boolean</code>                      | Enables image-based lite mode on Android.                                                                                                              | <code>false</code> |       |
+| **`devicePixelRatio`** | <code>number</code>                       | Override pixel ratio for native map.                                                                                                                   |                    |       |
+| **`mapId`**            | <code>string</code>                       | A map id associated with a specific map style or feature. [Use Map IDs](https://developers.google.com/maps/documentation/get-map-id) Only for Web.     |                    | 5.4.0 |
+| **`androidMapId`**     | <code>string</code>                       | A map id associated with a specific map style or feature. [Use Map IDs](https://developers.google.com/maps/documentation/get-map-id) Only for Android. |                    | 5.4.0 |
+| **`iOSMapId`**         | <code>string</code>                       | A map id associated with a specific map style or feature. [Use Map IDs](https://developers.google.com/maps/documentation/get-map-id) Only for iOS.     |                    | 5.4.0 |
 
 
 #### LatLng
@@ -947,6 +1031,45 @@ An interface representing a pair of latitude and longitude coordinates.
 | Prop        | Type                |
 | ----------- | ------------------- |
 | **`mapId`** | <code>string</code> |
+
+
+#### GoogleMapConfig
+
+For web, all the javascript Google Maps options are available as
+GoogleMapConfig extends google.maps.MapOptions.
+For iOS and Android the following options from google.maps.MapOptions with the same signature are additionally available:
+- gestureHandling ('none' | 'auto')
+- mapTypeId
+- maxZoom
+- minZoom
+- restriction
+- styles
+
+| Prop                                 | Type                                              | Description                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`isAccessibilityElementsEnabled`** | <code>boolean</code>                              | Show accessibility elements for overlay objects, such as <a href="#marker">Marker</a> and <a href="#polyline">Polyline</a>. Only available on iOS. |
+| **`isCompassEnabled`**               | <code>boolean</code>                              | Enables or disables the compass.                                                                                                                   |
+| **`isMyLocationButtonEnabled`**      | <code>boolean</code>                              | Sets whether a button should be displayed, which centers the camera to the users current position.                                                 |
+| **`isMyLocationEnabled`**            | <code>boolean</code>                              | Sets whether the My Location dot and accuracy circle is enabled.                                                                                   |
+| **`isIndoorMapsEnabled`**            | <code>boolean</code>                              | Sets whether indoor maps should be enabled. Only available on Android and iOS.                                                                     |
+| **`isRotateGesturesEnabled`**        | <code>boolean</code>                              | Sets the preference for whether rotate gestures should be enabled or disabled.                                                                     |
+| **`isTiltGesturesEnabled`**          | <code>boolean</code>                              | Sets the preference for whether tilt gestures should be enabled or disabled.                                                                       |
+| **`isToolbarEnabled`**               | <code>boolean</code>                              | Sets the preference for whether the Map Toolbar should be enabled or disabled. Only available on Android.                                          |
+| **`isTrafficLayerEnabled`**          | <code>boolean</code>                              | Turns the traffic layer on or off.                                                                                                                 |
+| **`isZoomGesturesEnabled`**          | <code>boolean</code>                              | Sets the preference for whether zoom gestures should be enabled or disabled.                                                                       |
+| **`padding`**                        | <code><a href="#mappadding">MapPadding</a></code> | Padding on the 'visible' region of the view.                                                                                                       |
+
+
+#### MapPadding
+
+Controls for setting padding on the 'visible' region of the view.
+
+| Prop         | Type                |
+| ------------ | ------------------- |
+| **`top`**    | <code>number</code> |
+| **`left`**   | <code>number</code> |
+| **`right`**  | <code>number</code> |
+| **`bottom`** | <code>number</code> |
 
 
 #### Marker
@@ -1044,6 +1167,11 @@ Describes the style for some region of a polyline.
 | **`segments`** | <code>number</code> | The length of this span in number of segments.                                    |
 
 
+#### FeatureStyles
+
+Feature styles, identified by the feature id
+
+
 #### CameraConfig
 
 Configuration properties for a Google Map Camera
@@ -1056,18 +1184,6 @@ Configuration properties for a Google Map Camera
 | **`angle`**             | <code>number</code>                       | The angle, in degrees, of the camera from the nadir (directly facing the Earth). The only allowed values are 0 and 45. | <code>0</code>     |
 | **`animate`**           | <code>boolean</code>                      | Animate the transition to the new Camera properties.                                                                   | <code>false</code> |
 | **`animationDuration`** | <code>number</code>                       | This configuration option is not being used.                                                                           |                    |
-
-
-#### MapPadding
-
-Controls for setting padding on the 'visible' region of the view.
-
-| Prop         | Type                |
-| ------------ | ------------------- |
-| **`top`**    | <code>number</code> |
-| **`left`**   | <code>number</code> |
-| **`right`**  | <code>number</code> |
-| **`bottom`** | <code>number</code> |
 
 
 #### CameraIdleCallbackData
@@ -1191,6 +1307,14 @@ Supports markers of either either "legacy" or "advanced" types.
 
 
 ### Enums
+
+
+#### FeatureType
+
+| Members       | Value                  | Description |
+| ------------- | ---------------------- | ----------- |
+| **`Default`** | <code>'Default'</code> | Default     |
+| **`GeoJSON`** | <code>'GeoJSON'</code> | GeoJSON     |
 
 
 #### MapType

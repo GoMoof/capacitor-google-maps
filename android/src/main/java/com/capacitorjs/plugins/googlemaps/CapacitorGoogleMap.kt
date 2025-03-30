@@ -1,8 +1,10 @@
 package com.capacitorjs.plugins.googlemaps
 
+import android.R.id.input
 import android.annotation.SuppressLint
 import android.graphics.*
 import android.location.Location
+import android.util.Base64
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
@@ -16,8 +18,19 @@ import com.google.android.gms.maps.GoogleMap.*
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.clustering.Cluster
 import com.google.maps.android.clustering.ClusterManager
+import com.google.maps.android.data.Feature
+import com.google.maps.android.data.geojson.GeoJsonFeature
+import com.google.maps.android.data.geojson.GeoJsonGeometryCollection
+import com.google.maps.android.data.geojson.GeoJsonLayer
+import com.google.maps.android.data.geojson.GeoJsonLineString
+import com.google.maps.android.data.geojson.GeoJsonMultiLineString
+import com.google.maps.android.data.geojson.GeoJsonMultiPoint
+import com.google.maps.android.data.geojson.GeoJsonMultiPolygon
+import com.google.maps.android.data.geojson.GeoJsonPoint
+import com.google.maps.android.data.geojson.GeoJsonPolygon
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import org.json.JSONObject
 import java.io.InputStream
 import java.net.URL
 
@@ -45,7 +58,8 @@ class CapacitorGoogleMap(
     private val markers = HashMap<String, CapacitorGoogleMapMarker>()
     private val polygons = HashMap<String, CapacitorGoogleMapsPolygon>()
     private val circles = HashMap<String, CapacitorGoogleMapsCircle>()
-    private val polylines = HashMap<String, CapacitorGoogleMapPolyline>()        
+    private val polylines = HashMap<String, CapacitorGoogleMapPolyline>()
+    private val featureLayers = HashMap<String, CapacitorGoogleMapsFeatureLayer>()
     private val markerIcons = HashMap<String, Bitmap>()
     private var clusterManager: ClusterManager<CapacitorGoogleMapMarker>? = null
 
@@ -102,9 +116,6 @@ class CapacitorGoogleMap(
 
                 bridge.webView.bringToFront()
                 bridge.webView.setBackgroundColor(Color.TRANSPARENT)
-                if (config.styles != null) {
-                    googleMap?.setMapStyle(MapStyleOptions(config.styles!!))
-                }
             }
         }
     }
@@ -150,6 +161,166 @@ class CapacitorGoogleMap(
                             this@CapacitorGoogleMap.id
                     )
             mapViewParent.bringToFront()
+        }
+    }
+
+    fun applyConfig(configObject: JSObject, callback: (error: GoogleMapsError?) -> Unit) {
+        try {
+            googleMap ?: throw GoogleMapNotAvailable()
+
+            CoroutineScope(Dispatchers.Main).launch {
+                if (configObject.has("gestureHandling")) {
+                    googleMap?.uiSettings?.setAllGesturesEnabled(configObject.getString("gestureHandling") != "none")
+                }
+
+                if (configObject.has("isCompassEnabled")) {
+                    googleMap?.uiSettings?.isCompassEnabled = configObject.getBool("isCompassEnabled") == true
+                }
+
+                if (configObject.has("isIndoorMapsEnabled")) {
+                    googleMap?.isIndoorEnabled = configObject.getBool("isIndoorMapsEnabled") == true
+                }
+
+                if (configObject.has("isMyLocationButtonEnabled")) {
+                    googleMap?.uiSettings?.isMyLocationButtonEnabled = configObject.getBool("isMyLocationButtonEnabled") == true
+                }
+
+                if (configObject.has("isMyLocationEnabled")) {
+                    @SuppressLint("MissingPermission")
+                    googleMap?.isMyLocationEnabled = configObject.getBool("isMyLocationEnabled") == true
+                }
+
+                if (configObject.has("isRotateGesturesEnabled")) {
+                    googleMap?.uiSettings?.isRotateGesturesEnabled =  configObject.getBool("isRotateGesturesEnabled") == true
+                }
+
+                if (configObject.has("isTiltGesturesEnabled")) {
+                    googleMap?.uiSettings?.isTiltGesturesEnabled = configObject.getBool("isTiltGesturesEnabled") == true
+                }
+
+                if (configObject.has("isToolbarEnabled")) {
+                    googleMap?.uiSettings?.isMapToolbarEnabled = configObject.getBool("isToolbarEnabled") == true
+                }
+
+                if (configObject.has("isTrafficLayerEnabled")) {
+                    googleMap?.isTrafficEnabled = configObject.getBool("isTrafficLayerEnabled") == true
+                }
+
+                if (configObject.has("isZoomGesturesEnabled")) {
+                    googleMap?.uiSettings?.isZoomGesturesEnabled = configObject.getBool("isZoomGesturesEnabled") == true
+                }
+
+                if (configObject.has("mapTypeId")) {
+                    setMapType(configObject.getString("mapTypeId"))
+                }
+
+                if (configObject.has("maxZoom")) {
+                    setMaxZoom(configObject.getDouble("maxZoom").toFloat())
+                }
+
+                if (configObject.has("minZoom")) {
+                    setMinZoom(configObject.getDouble("minZoom").toFloat())
+                }
+
+                if (configObject.has("padding")) {
+                    setPadding(configObject.getJSObject("padding"))
+                }
+
+                if (configObject.has("restriction")) {
+                    setRestriction(configObject.getJSObject("restriction"))
+                }
+
+                if (configObject.has("styles")) {
+                    googleMap?.setMapStyle(configObject.getString("styles")
+                        ?.let { MapStyleOptions(it) })
+                }
+
+                callback(null)
+            }
+        } catch (e: GoogleMapsError) {
+            callback(e)
+        }
+    }
+
+    private fun setMapType(mapTypeId: String?) {
+        val mapTypeInt: Int =
+            when (mapTypeId?.lowercase()) {
+                "normal" -> MAP_TYPE_NORMAL
+                "hybrid" -> MAP_TYPE_HYBRID
+                "satellite" -> MAP_TYPE_SATELLITE
+                "terrain" -> MAP_TYPE_TERRAIN
+                "none" -> MAP_TYPE_NONE
+                else -> {
+                    Log.w(
+                        "CapacitorGoogleMaps",
+                        "unknown mapView type '$mapTypeId'  Defaulting to normal."
+                    )
+                    MAP_TYPE_NORMAL
+                }
+            }
+
+        googleMap?.mapType = mapTypeInt
+    }
+
+    private fun setMaxZoom(maxZoom: Float) {
+        var minZoom = googleMap?.minZoomLevel
+        googleMap?.resetMinMaxZoomPreference()
+        if (minZoom != null) {
+            googleMap?.setMinZoomPreference(minZoom)
+        }
+        if (maxZoom != 0F) {
+            googleMap?.setMinZoomPreference(maxZoom)
+        }
+    }
+
+    private fun setMinZoom(minZoom: Float) {
+        var maxZoom = googleMap?.maxZoomLevel
+        googleMap?.resetMinMaxZoomPreference()
+        if (maxZoom != null) {
+            googleMap?.setMaxZoomPreference(maxZoom)
+        }
+        if (minZoom != 0F) {
+            googleMap?.setMinZoomPreference(minZoom)
+        }
+    }
+
+    private fun setPadding(paddingObj: JSObject?) {
+        if (paddingObj == null) {
+            googleMap?.setPadding(0, 0, 0, 0)
+        } else {
+            val padding = GoogleMapPadding(paddingObj)
+            val left = getScaledPixels(delegate.bridge, padding.left)
+            val top = getScaledPixels(delegate.bridge, padding.top)
+            val right = getScaledPixels(delegate.bridge, padding.right)
+            val bottom = getScaledPixels(delegate.bridge, padding.bottom)
+            googleMap?.setPadding(left, top, right, bottom)
+        }
+    }
+
+    private fun setRestriction(restrictionObj: JSObject?) {
+        var latLngBounds = restrictionObj?.getJSObject("latLngBounds")
+        var bounds: LatLngBounds? = null
+
+        if (latLngBounds != null) {
+            bounds = createLatLngBoundsFromGMSJS(latLngBounds)
+        }
+
+        googleMap?.resetMinMaxZoomPreference()
+        googleMap?.setLatLngBoundsForCameraTarget(null)
+
+        if (bounds != null) {
+            googleMap?.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 0),
+                object : CancelableCallback {
+                    override fun onFinish() {
+                        val zoom = googleMap?.cameraPosition?.zoom
+                        if (zoom != null) {
+                            googleMap?.setMinZoomPreference(zoom)
+                        }
+                        googleMap?.setLatLngBoundsForCameraTarget(bounds)
+                    }
+                    override fun onCancel() {}
+                }
+            )
         }
     }
 
@@ -224,6 +395,7 @@ class CapacitorGoogleMap(
                             this@CapacitorGoogleMap.buildMarker(marker)
                         }
                 val googleMapMarker = googleMap?.addMarker(markerOptions.await())
+                googleMapMarker?.showInfoWindow()
 
                 marker.googleMapMarker = googleMapMarker
 
@@ -321,6 +493,78 @@ class CapacitorGoogleMap(
             }
         } catch (e: GoogleMapsError) {
             callback(Result.failure(e))
+        }
+    }
+
+    fun addFeatures(type: String, data: JSONObject, idPropertyName: String?, styles: JSONObject?, callback: (ids: Result<List<String>>) -> Unit) {
+        try {
+            googleMap ?: throw GoogleMapNotAvailable()
+            val featureIds: MutableList<String> = mutableListOf()
+
+            CoroutineScope(Dispatchers.Main).launch {
+                if (type == "GeoJSON") {
+                    val tempLayer = GeoJsonLayer(null, data)
+                    tempLayer.features.forEach {
+                        try {
+                            val layer = GeoJsonLayer(googleMap, JSONObject())
+                            val featureLayer = CapacitorGoogleMapsFeatureLayer(layer, it, idPropertyName, styles)
+                            layer.addLayerToMap()
+                            if (id != null) {
+                                featureIds.add(id)
+                                featureLayers[id] = featureLayer
+                            }
+                            callback(Result.success(featureIds))
+                        } catch (e: Exception) {
+                            callback(Result.failure(e))
+                        }
+                    }
+                } else {
+                    callback(Result.failure(InvalidArgumentsError("addFeatures: not supported for this feature type")))
+                }
+            }
+        } catch (e: GoogleMapsError) {
+            callback(Result.failure(e))
+        }
+    }
+
+    fun getFeatureBounds(featureId: String, callback: (bounds: Result<LatLngBounds?>) -> Unit) {
+        try {
+            CoroutineScope(Dispatchers.Main).launch {
+                val featurelayer = featureLayers[featureId]
+                var feature: Feature? = null;
+                featurelayer?.layer?.features?.forEach lit@ {
+                    if (it.id == featurelayer.id) {
+                        feature = it
+                        return@lit
+                    }
+                }
+                if (feature != null) {
+                    try {
+                        (feature as GeoJsonFeature).let {
+                            callback(Result.success(it.boundingBoxFromGeometry()))
+                        }
+                    } catch (e: Exception) {
+                        callback(Result.failure(InvalidArgumentsError("getFeatureBounds: not supported for this feature type")))
+                    }
+                } else {
+                    callback(Result.failure(InvalidArgumentsError("Could not find feature for feature id $featureId")))
+                }
+            }
+        } catch(e: Exception) {
+            callback(Result.failure(InvalidArgumentsError("Could not find feature layer")))
+        }
+    }
+
+    fun removeFeature(featureId: String, callback: (error: GoogleMapsError?) -> Unit) {
+        CoroutineScope(Dispatchers.Main).launch {
+            val featurelayer = featureLayers[featureId]
+            if (featurelayer != null) {
+                featurelayer.layer?.removeLayerFromMap()
+                featureLayers.remove(featureId)
+                callback(null)
+            } else {
+                callback(InvalidArgumentsError("Could not find feature for feature id $featureId"))
+            }
         }
     }
 
@@ -562,104 +806,6 @@ class CapacitorGoogleMap(
         }
     }
 
-    fun getMapType(callback: (type: String, error: GoogleMapsError?) -> Unit) {
-        try {
-            googleMap ?: throw GoogleMapNotAvailable()
-            CoroutineScope(Dispatchers.Main).launch {
-                val mapType: String = when (googleMap?.mapType) {
-                    MAP_TYPE_NORMAL -> "Normal"
-                    MAP_TYPE_HYBRID -> "Hybrid"
-                    MAP_TYPE_SATELLITE -> "Satellite"
-                    MAP_TYPE_TERRAIN -> "Terrain"
-                    MAP_TYPE_NONE -> "None"
-                    else -> {
-                        "Normal"
-                    }
-                }
-                callback(mapType, null);
-            }
-        }  catch (e: GoogleMapsError) {
-            callback("", e)
-        }
-    }
-
-    fun setMapType(mapType: String, callback: (error: GoogleMapsError?) -> Unit) {
-        try {
-            googleMap ?: throw GoogleMapNotAvailable()
-            CoroutineScope(Dispatchers.Main).launch {
-                val mapTypeInt: Int =
-                        when (mapType) {
-                            "Normal" -> MAP_TYPE_NORMAL
-                            "Hybrid" -> MAP_TYPE_HYBRID
-                            "Satellite" -> MAP_TYPE_SATELLITE
-                            "Terrain" -> MAP_TYPE_TERRAIN
-                            "None" -> MAP_TYPE_NONE
-                            else -> {
-                                Log.w(
-                                        "CapacitorGoogleMaps",
-                                        "unknown mapView type '$mapType'  Defaulting to normal."
-                                )
-                                MAP_TYPE_NORMAL
-                            }
-                        }
-
-                googleMap?.mapType = mapTypeInt
-                callback(null)
-            }
-        } catch (e: GoogleMapsError) {
-            callback(e)
-        }
-    }
-
-    fun enableIndoorMaps(enabled: Boolean, callback: (error: GoogleMapsError?) -> Unit) {
-        try {
-            googleMap ?: throw GoogleMapNotAvailable()
-            CoroutineScope(Dispatchers.Main).launch {
-                googleMap?.isIndoorEnabled = enabled
-                callback(null)
-            }
-        } catch (e: GoogleMapsError) {
-            callback(e)
-        }
-    }
-
-    fun enableTrafficLayer(enabled: Boolean, callback: (error: GoogleMapsError?) -> Unit) {
-        try {
-            googleMap ?: throw GoogleMapNotAvailable()
-            CoroutineScope(Dispatchers.Main).launch {
-                googleMap?.isTrafficEnabled = enabled
-                callback(null)
-            }
-        } catch (e: GoogleMapsError) {
-            callback(e)
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    fun enableCurrentLocation(enabled: Boolean, callback: (error: GoogleMapsError?) -> Unit) {
-        try {
-            googleMap ?: throw GoogleMapNotAvailable()
-            CoroutineScope(Dispatchers.Main).launch {
-                googleMap?.isMyLocationEnabled = enabled
-                callback(null)
-            }
-        } catch (e: GoogleMapsError) {
-            callback(e)
-        }
-    }
-
-    fun setPadding(padding: GoogleMapPadding, callback: (error: GoogleMapsError?) -> Unit) {
-        try {
-            googleMap ?: throw GoogleMapNotAvailable()
-            CoroutineScope(Dispatchers.Main).launch {
-                googleMap?.setPadding(padding.left, padding.top, padding.right, padding.bottom)
-                callback(null)
-            }
-        } catch (e: GoogleMapsError) {
-            callback(e)
-        }
-    }
-
     fun getMapBounds(): Rect {
         return Rect(
                 getScaledPixels(delegate.bridge, config.x),
@@ -676,6 +822,20 @@ class CapacitorGoogleMap(
     fun fitBounds(bounds: LatLngBounds, padding: Int) {
         val cameraUpdate = CameraUpdateFactory.newLatLngBounds(bounds, padding)
         googleMap?.animateCamera(cameraUpdate)
+    }
+
+    private fun createLatLngBoundsFromGMSJS(boundsObject: JSObject): LatLngBounds {
+        val southwestLatLng = LatLng(
+            boundsObject.getDouble("south"),
+            boundsObject.getDouble("west")
+        )
+
+        val northeastLatLng = LatLng(
+            boundsObject.getDouble("north"),
+            boundsObject.getDouble("east")
+        )
+
+        return LatLngBounds(southwestLatLng, northeastLatLng)
     }
 
     private fun getScaledPixels(bridge: Bridge, pixels: Int): Int {
@@ -783,13 +943,19 @@ class CapacitorGoogleMap(
                 markerOptions.icon(getResizedIcon(cachedBitmap!!, marker))
             } else {
                 try {
-                    var stream: InputStream? = null
-                    if (marker.iconUrl!!.startsWith("https:")) {
-                        stream = URL(marker.iconUrl).openConnection().getInputStream()
+                    var bitmap: Bitmap? = null
+                    if (marker.iconUrl!!.contains(";base64,")) {
+                        val decodedString: ByteArray = Base64.decode(marker.iconUrl!!.split(";base64,")[1], Base64.DEFAULT)
+                        bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
                     } else {
-                        stream = this.delegate.context.assets.open("public/${marker.iconUrl}")
+                        var stream: InputStream? = null
+                        if (marker.iconUrl!!.startsWith("https:")) {
+                            stream = URL(marker.iconUrl).openConnection().getInputStream()
+                        } else {
+                            stream = this.delegate.context.assets.open("public/${marker.iconUrl}")
+                        }
+                        bitmap = BitmapFactory.decodeStream(stream)
                     }
-                    var bitmap = BitmapFactory.decodeStream(stream)
                     this.markerIcons[marker.iconUrl!!] = bitmap
                     markerOptions.icon(getResizedIcon(bitmap, marker))
                 } catch (e: Exception) {
@@ -939,6 +1105,52 @@ class CapacitorGoogleMap(
         data.put("items", items)
 
         return data
+    }
+
+    private fun GeoJsonFeature.boundingBoxFromGeometry(): LatLngBounds? {
+        val coordinates: MutableList<LatLng> = ArrayList()
+
+        if (this.hasGeometry()) {
+            when (geometry.geometryType) {
+                "Point" -> coordinates.add((geometry as GeoJsonPoint).coordinates)
+                "MultiPoint" -> {
+                    val points = (geometry as GeoJsonMultiPoint).points
+                    for (point in points) {
+                        coordinates.add(point.coordinates)
+                    }
+                }
+
+                "LineString" -> coordinates.addAll((geometry as GeoJsonLineString).coordinates)
+                "MultiLineString" -> {
+                    val lines = (geometry as GeoJsonMultiLineString).lineStrings
+                    for (line in lines) {
+                        coordinates.addAll(line.coordinates)
+                    }
+                }
+
+                "Polygon" -> {
+                    val lists = (geometry as GeoJsonPolygon).coordinates
+                    for (list in lists) {
+                        coordinates.addAll(list)
+                    }
+                }
+
+                "MultiPolygon" -> {
+                    val polygons = (geometry as GeoJsonMultiPolygon).polygons
+                    for (polygon in polygons) {
+                        for (list in polygon.coordinates) {
+                            coordinates.addAll(list)
+                        }
+                    }
+                }
+            }
+        }
+
+        val builder = LatLngBounds.builder()
+        for (latLng in coordinates) {
+            builder.include(latLng)
+        }
+        return builder.build()
     }
 
     override fun onMapClick(point: LatLng) {

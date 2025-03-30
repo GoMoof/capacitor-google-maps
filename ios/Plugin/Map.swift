@@ -78,6 +78,7 @@ public class Map {
     var polygons = [Int: GMSPolygon]()
     var circles = [Int: GMSCircle]()
     var polylines = [Int: GMSPolyline]()
+    var features = [String: GMUGeometryRenderer]()
     var markerIcons = [String: UIImage]()
 
     // swiftlint:disable identifier_name
@@ -120,14 +121,6 @@ public class Map {
                 self.mapViewController.view.frame = target.bounds
                 target.addSubview(self.mapViewController.view)
                 self.mapViewController.GMapView.delegate = self.delegate
-            }
-
-            if let styles = self.config.styles {
-                do {
-                    self.mapViewController.GMapView.mapStyle = try GMSMapStyle(jsonString: styles)
-                } catch {
-                    CAPLog.print("Invalid Google Maps styles")
-                }
             }
 
             self.delegate.notifyListeners("onMapReady", data: [
@@ -180,10 +173,11 @@ public class Map {
 
                     let height = Double((item as? UIScrollView)?.contentSize.height ?? 0)
                     let width = Double((item as? UIScrollView)?.contentSize.width ?? 0)
-                    let actualHeight = round(height / 2)
+                    let actualHeightFloor = floor(height / 2)
+                    let actualHeightCeil = ceil(height / 2)
 
-                    let isWidthEqual = width == self.config.width
-                    let isHeightEqual = actualHeight == self.config.height
+                    let isWidthEqual = width == refWidth
+                    let isHeightEqual = actualHeightFloor == refHeight || actualHeightCeil == refHeight
 
                     if isWidthEqual && isHeightEqual && item.tag < self.targetViewController?.tag ?? Map.MAP_TAG {
                         return item
@@ -193,6 +187,116 @@ public class Map {
         }
 
         return nil
+    }
+
+    func applyConfig(configObj: JSObject) {
+        DispatchQueue.main.async {
+            if (configObj as [String: Any]).keys.contains("gestureHandling"), let gestureHandling = configObj["gestureHandling"] as? String {
+                self.mapViewController.GMapView.settings.consumesGesturesInView = gestureHandling != "none"
+            }
+
+            if (configObj as [String: Any]).keys.contains("isAccessibilityElementsEnabled"), let isAccessibilityElementsEnabled = configObj["isAccessibilityElementsEnabled"] as? Bool {
+                self.mapViewController.GMapView.accessibilityElementsHidden = isAccessibilityElementsEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isCompassEnabled"), let isCompassEnabled = configObj["isCompassEnabled"] as? Bool {
+                self.mapViewController.GMapView.settings.compassButton = isCompassEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isIndoorMapsEnabled"), let isIndoorMapsEnabled = configObj["isIndoorMapsEnabled"] as? Bool {
+                self.mapViewController.GMapView.isIndoorEnabled = isIndoorMapsEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isMyLocationButtonEnabled"), let isMyLocationButtonEnabled = configObj["isMyLocationButtonEnabled"] as? Bool {
+                self.mapViewController.GMapView.settings.myLocationButton = isMyLocationButtonEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isMyLocationEnabled"), let isMyLocationEnabled = configObj["isMyLocationEnabled"] as? Bool {
+                self.mapViewController.GMapView.isMyLocationEnabled = isMyLocationEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isRotateGesturesEnabled"), let isRotateGesturesEnabled = configObj["isRotateGesturesEnabled"] as? Bool {
+                self.mapViewController.GMapView.settings.rotateGestures = isRotateGesturesEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isTiltGesturesEnabled"), let isTiltGesturesEnabled = configObj["isTiltGesturesEnabled"] as? Bool {
+                self.mapViewController.GMapView.settings.tiltGestures = isTiltGesturesEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isTrafficLayerEnabled"), let isTrafficLayerEnabled = configObj["isTrafficLayerEnabled"] as? Bool {
+                self.mapViewController.GMapView.isTrafficEnabled = isTrafficLayerEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("isZoomGesturesEnabled"), let isZoomGesturesEnabled = configObj["isZoomGesturesEnabled"] as? Bool {
+                self.mapViewController.GMapView.settings.zoomGestures = isZoomGesturesEnabled
+            }
+
+            if (configObj as [String: Any]).keys.contains("mapTypeId"), let mapTypeId = configObj["mapTypeId"] as? String {
+                self.setMapType(mapTypeId: mapTypeId)
+            }
+
+            if (configObj as [String: Any]).keys.contains("maxZoom"), let maxZoom = configObj["maxZoom"] as? Float {
+                self.mapViewController.GMapView.setMinZoom(self.mapViewController.GMapView.minZoom, maxZoom: maxZoom)
+            }
+
+            if (configObj as [String: Any]).keys.contains("minZoom"), let minZoom = configObj["minZoom"] as? Float {
+                self.mapViewController.GMapView.setMinZoom(minZoom, maxZoom: self.mapViewController.GMapView.maxZoom)
+            }
+
+            if (configObj as [String: Any]).keys.contains("padding"), let paddingObj = configObj["padding"] as? JSObject {
+                self.setPadding(paddingObj: paddingObj)
+            }
+
+            if (configObj as [String: Any]).keys.contains("restriction") {
+                let restrictionObj = (configObj as [String: Any])["restriction"] as? JSObject
+                self.setRestriction(restrictionObj: restrictionObj)
+            }
+
+            if (configObj as [String: Any]).keys.contains("styles"), let stylesObj = (configObj as [String: Any])["styles"] as? JSArray {
+                self.setStyle(stylesObj: stylesObj)
+            }
+        }
+    }
+
+    private func setMapType(mapTypeId: String) {
+        let mapType = GMSMapViewType.fromString(mapType: mapTypeId)
+        self.mapViewController.GMapView.mapType = mapType
+    }
+
+    private func setPadding(paddingObj: JSObject) {
+        if let padding = try? GoogleMapPadding.init(fromJSObject: paddingObj) {
+            let mapInsets = UIEdgeInsets(top: CGFloat(padding.top), left: CGFloat(padding.left), bottom: CGFloat(padding.bottom), right: CGFloat(padding.right))
+            self.mapViewController.GMapView.padding = mapInsets
+        }
+    }
+
+    private func setRestriction(restrictionObj: JSObject?) {
+        let latLngBounds = restrictionObj?["latLngBounds"] as? JSObject
+        var bounds: GMSCoordinateBounds? = nil
+
+        if latLngBounds != nil {
+            bounds = try? getGMSCoordinateBoundsFromGMSJS(latLngBounds!)
+        }
+
+        self.mapViewController.GMapView.setMinZoom(kGMSMinZoomLevel, maxZoom: kGMSMaxZoomLevel)
+        self.mapViewController.GMapView.cameraTargetBounds = nil
+
+        if (bounds != nil) {
+            CATransaction.begin()
+            CATransaction.setCompletionBlock({
+                self.mapViewController.GMapView.setMinZoom(self.mapViewController.GMapView.camera.zoom, maxZoom: kGMSMaxZoomLevel)
+                self.mapViewController.GMapView.cameraTargetBounds = bounds
+            })
+            self.mapViewController.GMapView.animate(with: GMSCameraUpdate.fit(bounds!))
+            CATransaction.commit()
+        }
+    }
+
+    private func setStyle(stylesObj: JSArray) {
+        if let jsonData = try? JSONSerialization.data(withJSONObject: stylesObj, options: []) {
+            let stylesString = String(data: jsonData, encoding: .utf8)
+            self.mapViewController.GMapView.mapStyle = try? GMSMapStyle(jsonString: stylesString!)
+        }
     }
 
     func destroy() {
@@ -403,6 +507,87 @@ public class Map {
         }
     }
 
+    func addFeatures(type: String, data: JSObject, idPropertyName: String?, styles: JSObject?) throws -> [String] {
+        var featureIds: [String] = []
+
+        DispatchQueue.main.sync {
+            let jsonData : Data = try! JSONSerialization.data(withJSONObject: data, options: [])
+            let geoJSONParser = GMUGeoJSONParser(data: jsonData)
+            geoJSONParser.parse()
+
+            for container in geoJSONParser.features {
+                if let tempFeature = container as? GMUFeature, let propertes = tempFeature.properties {
+                    var featureId: String? = nil
+                    if (idPropertyName != nil) {
+                        featureId = propertes[idPropertyName!] as? String
+
+                        if (featureId != nil) {
+                            if let renderer = self.features[featureId!] {
+                                renderer.clear()
+                                self.features.removeValue(forKey: featureId!)
+                            }
+                        }
+                    }
+
+                    let feature = GMUFeature(geometry: tempFeature.geometry, identifier: featureId, properties: tempFeature.properties, boundingBox: nil)
+
+                    if (featureId != nil) {
+                        featureIds.append(featureId!)
+                    }
+
+                    if (featureId != nil && styles != nil) {
+                        if let stylesData = (styles! as [String: Any])[featureId!] as? [String: Any] {
+                            if let strokeColor = stylesData["strokeColor"] as? String,
+                               let strokeOpacity = stylesData["strokeOpacity"] as? Double,
+                               let stroke = UIColor.init(hex: strokeColor)?.withAlphaComponent(strokeOpacity),
+                               let fillColor = stylesData["fillColor"] as? String,
+                               let fillOpacity = stylesData["fillOpacity"] as? Double,
+                               let fill = UIColor.init(hex: fillColor)?.withAlphaComponent(fillOpacity)
+                            {
+                                let style = GMUStyle(styleID: "styleId", stroke: stroke, fill: fill, width: stylesData["strokeWeight"] as? Double ?? 1, scale: 2, heading: 0, anchor: CGPoint(x: 0, y: 0), iconUrl: nil, title: nil, hasFill: true, hasStroke: true)
+                                feature.style = style
+                            }
+                        }
+                    }
+
+                    let renderer = GMUGeometryRenderer(map: self.mapViewController.GMapView, geometries: [feature])
+                    renderer.render()
+
+                    if (featureId != nil) {
+                        self.features[featureId!] = renderer
+                    }
+                }
+            }
+        }
+
+        return featureIds
+    }
+
+    func getFeatureBounds(featureId: String) throws -> GMSCoordinateBounds {
+        if let renderer = self.features[featureId] {
+            var bounds: GMSCoordinateBounds!
+
+            DispatchQueue.main.sync {
+                bounds = renderer.getBounds()
+            }
+
+            return bounds
+        } else {
+            throw GoogleMapErrors.unhandledError("feature not found")
+        }
+    }
+
+    func removeFeature(featureId: String) throws {
+        if let renderer = self.features[featureId] {
+            DispatchQueue.main.async {
+                renderer.clear()
+                self.features.removeValue(forKey: featureId)
+            }
+        } else {
+            throw GoogleMapErrors.unhandledError("feature not found")
+        }
+    }
+
     func setCamera(config: GoogleMapCameraConfig) throws {
         let currentCamera = self.mapViewController.GMapView.camera
 
@@ -425,47 +610,6 @@ public class Map {
             }
         }
 
-    }
-
-    func getMapType() -> GMSMapViewType {
-        return self.mapViewController.GMapView.mapType
-    }
-
-    func setMapType(mapType: GMSMapViewType) throws {
-        DispatchQueue.main.sync {
-            self.mapViewController.GMapView.mapType = mapType
-        }
-    }
-
-    func enableIndoorMaps(enabled: Bool) throws {
-        DispatchQueue.main.sync {
-            self.mapViewController.GMapView.isIndoorEnabled = enabled
-        }
-    }
-
-    func enableTrafficLayer(enabled: Bool) throws {
-        DispatchQueue.main.sync {
-            self.mapViewController.GMapView.isTrafficEnabled = enabled
-        }
-    }
-
-    func enableAccessibilityElements(enabled: Bool) throws {
-        DispatchQueue.main.sync {
-            self.mapViewController.GMapView.accessibilityElementsHidden = enabled
-        }
-    }
-
-    func enableCurrentLocation(enabled: Bool) throws {
-        DispatchQueue.main.sync {
-            self.mapViewController.GMapView.isMyLocationEnabled = enabled
-        }
-    }
-
-    func setPadding(padding: GoogleMapPadding) throws {
-        DispatchQueue.main.sync {
-            let mapInsets = UIEdgeInsets(top: CGFloat(padding.top), left: CGFloat(padding.left), bottom: CGFloat(padding.bottom), right: CGFloat(padding.right))
-            self.mapViewController.GMapView.padding = mapInsets
-        }
     }
 
     func removeMarkers(ids: [Int]) throws {
@@ -494,6 +638,17 @@ public class Map {
             let cameraUpdate = GMSCameraUpdate.fit(bounds, withPadding: padding)
             self.mapViewController.GMapView.animate(with: cameraUpdate)
         }
+    }
+
+    private func getGMSCoordinateBoundsFromGMSJS(_ bounds: JSObject) throws -> GMSCoordinateBounds {
+        guard let south = bounds["south"] as? Double, let west = bounds["west"] as? Double, let north = bounds["north"] as? Double, let east = bounds["east"] as? Double else {
+            throw GoogleMapErrors.unhandledError("Bounds not formatted properly.")
+        }
+
+        return GMSCoordinateBounds(
+            coordinate: CLLocationCoordinate2D(latitude: south, longitude: west),
+            coordinate: CLLocationCoordinate2D(latitude: north, longitude: east)
+        )
     }
 
     private func getFrameOverflowBounds(frame: CGRect, mapBounds: CGRect) -> [CGRect] {
@@ -730,5 +885,41 @@ extension UIImage {
         let resizedImage = UIGraphicsGetImageFromCurrentImageContext()!
         UIGraphicsEndImageContext()
         return resizedImage
+    }
+}
+
+extension GMUGeometryRenderer {
+    func getBounds() -> GMSCoordinateBounds {
+        var bounds = GMSCoordinateBounds.init()
+
+        for overlay in self.mapOverlays() {
+            if let circle = overlay as? GMSCircle {
+                bounds = bounds.includingBounds(circle.getBounds())
+            }
+            if let groundOverlay = overlay as? GMSGroundOverlay, let groundOverlayBounds = groundOverlay.bounds {
+                bounds = bounds.includingBounds(groundOverlayBounds)
+            }
+            if let marker = overlay as? GMSMarker {
+                bounds = bounds.includingCoordinate(marker.position)
+            }
+            if let polygon = overlay as? GMSPolygon, let polygonPath = polygon.path {
+                bounds = bounds.includingPath(polygonPath)
+            }
+            if let polyline = overlay as? GMSPolyline, let polylinePath = polyline.path {
+                bounds = bounds.includingPath(polylinePath)
+            }
+        }
+
+        return bounds
+    }
+}
+
+extension GMSCircle {
+    func getBounds() -> GMSCoordinateBounds {
+        var bounds = GMSCoordinateBounds.init(
+            coordinate: GMSGeometryOffset(self.position, self.radius * sqrt(2.0), 225),
+            coordinate: GMSGeometryOffset(self.position, self.radius * sqrt(2.0), 45)
+        )
+        return bounds
     }
 }

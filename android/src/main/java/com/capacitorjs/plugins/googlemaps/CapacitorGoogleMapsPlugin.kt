@@ -9,7 +9,6 @@ import android.view.View
 import com.getcapacitor.*
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
-import com.getcapacitor.annotation.PermissionCallback
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.OnMapsSdkInitializedCallback
 import com.google.android.gms.maps.model.LatLng
@@ -35,6 +34,7 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
     private var cachedTouchEvents: HashMap<String, MutableList<MotionEvent>> = HashMap()
     private val tag: String = "CAP-GOOGLE-MAPS"
     private var touchEnabled: HashMap<String, Boolean> = HashMap()
+    private var hasTouchStartedOnMap: Boolean = false
 
     companion object {
         const val LOCATION = "location"
@@ -64,12 +64,18 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
                                 }
                                 val mapRect = map.getMapBounds()
                                 if (mapRect.contains(touchX.toInt(), touchY.toInt())) {
-                                    if (event.action == MotionEvent.ACTION_DOWN) {
-                                        if (cachedTouchEvents[id] == null) {
-                                            cachedTouchEvents[id] = mutableListOf<MotionEvent>()
+                                    checkHasTouchStartedOnMap(event);
+                                    when (event.action) {
+                                        MotionEvent.ACTION_UP -> {
+                                            hasTouchStartedOnMap = false
                                         }
-
-                                        cachedTouchEvents[id]?.clear()
+                                        MotionEvent.ACTION_DOWN -> {
+                                            hasTouchStartedOnMap = true
+                                            if (cachedTouchEvents[id] == null) {
+                                                cachedTouchEvents[id] = mutableListOf<MotionEvent>()
+                                            }
+                                            cachedTouchEvents[id]?.clear()
+                                        }
                                     }
 
                                     val motionEvent = MotionEvent.obtain(event)
@@ -82,6 +88,8 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
 
                                     notifyListeners("isMapInFocus", payload)
                                     return true
+                                } else {
+                                    hasTouchStartedOnMap = false
                                 }
                             }
                         }
@@ -154,7 +162,40 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
             val newMap = CapacitorGoogleMap(id, config, this)
             maps[id] = newMap
 
-            call.resolve()
+            newMap.applyConfig(configObject,  { err ->
+                if (err != null) {
+                    throw err
+                }
+
+                call.resolve()
+            })
+        } catch (e: GoogleMapsError) {
+            handleError(call, e)
+        } catch (e: Exception) {
+            handleError(call, e)
+        }
+    }
+
+    @PluginMethod
+    fun update(call: PluginCall) {
+        try {
+            val id = call.getString("id")
+            id ?: throw InvalidMapIdError()
+
+            val map = maps[id]
+            map ?: throw MapNotFoundError()
+
+            val configObject =
+                call.getObject("config")
+                    ?: throw InvalidArgumentsError("config object is missing")
+
+            map.applyConfig(configObject,  { err ->
+                if (err != null) {
+                    throw err
+                }
+
+                call.resolve()
+            })
         } catch (e: GoogleMapsError) {
             handleError(call, e)
         } catch (e: Exception) {
@@ -631,6 +672,134 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
     }
 
     @PluginMethod
+    fun addFeatures(call: PluginCall) {
+        try {
+            val id = call.getString("id")
+            id ?: throw InvalidMapIdError()
+
+            val map = maps[id]
+            map ?: throw MapNotFoundError()
+
+            val type =
+                call.getString("type")
+                    ?: throw InvalidArgumentsError("feature type is missing")
+
+            val data =
+                call.getObject("data")
+                    ?: throw InvalidArgumentsError("feature data is missing")
+
+            val idPropertyName = call.getString("idPropertyName") ?: null
+
+            val styles = call.getObject("styles") ?: null
+
+            map.addFeatures(
+                type,
+                data,
+                idPropertyName,
+                styles
+            ) { result ->
+                try {
+                    val ids = result.getOrThrow()
+
+                    val jsonIDs = JSONArray()
+                    ids.forEach { jsonIDs.put(it) }
+
+                    val res = JSObject()
+                    res.put("ids", jsonIDs)
+                    call.resolve(res)
+                } catch (e: GoogleMapsError) {
+                    handleError(call, e)
+                } catch (e: Exception) {
+                    handleError(call, e)
+                }
+            }
+        } catch (e: GoogleMapsError) {
+            handleError(call, e)
+        } catch (e: Exception) {
+            handleError(call, e)
+        }
+    }
+
+    @PluginMethod
+    fun getFeatureBounds(call: PluginCall) {
+        try {
+            val id = call.getString("id")
+            id ?: throw InvalidMapIdError()
+
+            val map = maps[id]
+            map ?: throw MapNotFoundError()
+
+            val featureId =
+                call.getString("featureId")
+                    ?: throw InvalidArgumentsError("feature id is missing")
+
+            map.getFeatureBounds(featureId) { result ->
+                try {
+                    val featureBounds = result.getOrThrow()
+
+                    val southwest = JSObject()
+                    southwest.put("lat", featureBounds?.southwest?.latitude)
+                    southwest.put("lng", featureBounds?.southwest?.longitude)
+
+                    val center = JSObject()
+                    center.put("lat", featureBounds?.center?.latitude)
+                    center.put("lng", featureBounds?.center?.longitude)
+
+                    val northeast = JSObject()
+                    northeast.put("lat", featureBounds?.northeast?.latitude)
+                    northeast.put("lng", featureBounds?.northeast?.longitude)
+
+                    val bounds = JSObject()
+                    bounds.put("southwest", southwest)
+                    bounds.put("center", center)
+                    bounds.put("northeast", northeast)
+
+                    val res = JSObject()
+                    res.put("bounds", bounds)
+                    call.resolve(res)
+                } catch (e: GoogleMapsError) {
+                    handleError(call, e)
+                } catch (e: Exception) {
+                    handleError(call, e)
+                }
+            }
+        } catch (e: GoogleMapsError) {
+            handleError(call, e)
+        } catch (e: Exception) {
+            handleError(call, e)
+        }
+    }
+
+    @PluginMethod
+    fun removeFeature(call: PluginCall) {
+        try {
+            val id = call.getString("id")
+            id ?: throw InvalidMapIdError()
+
+            val map = maps[id]
+            map ?: throw MapNotFoundError()
+
+            val featureId =
+                call.getString("featureId")
+                    ?: throw InvalidArgumentsError("feature id is missing")
+
+            map.removeFeature(featureId) {
+                try {
+                    call.resolve()
+                } catch (e: GoogleMapsError) {
+                    handleError(call, e)
+                } catch (e: Exception) {
+                    handleError(call, e)
+                }
+            }
+        } catch (e: GoogleMapsError) {
+            handleError(call, e)
+        } catch (e: Exception) {
+            handleError(call, e)
+        }
+    }
+
+    @PluginMethod
     fun setCamera(call: PluginCall) {
         try {
             val id = call.getString("id")
@@ -657,160 +826,6 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
         } catch (e: Exception) {
             handleError(call, e)
         }
-    }
-
-    @PluginMethod
-    fun getMapType(call: PluginCall) {
-        try {
-            val id = call.getString("id")
-            id ?: throw InvalidMapIdError()
-
-            val map = maps[id]
-            map ?: throw MapNotFoundError()
-
-            map.getMapType() { type, err ->
-
-                if (err != null) {
-                    throw err
-                }
-                val data = JSObject()
-                data.put("type", type)
-                call.resolve(data)
-            }
-        } catch (e: GoogleMapsError) {
-            handleError(call, e)
-        } catch (e: Exception) {
-            handleError(call, e)
-        }
-    }
-
-    @PluginMethod
-    fun setMapType(call: PluginCall) {
-        try {
-            val id = call.getString("id")
-            id ?: throw InvalidMapIdError()
-
-            val map = maps[id]
-            map ?: throw MapNotFoundError()
-
-            val mapType =
-                    call.getString("mapType") ?: throw InvalidArgumentsError("mapType is missing")
-
-            map.setMapType(mapType) { err ->
-                if (err != null) {
-                    throw err
-                }
-
-                call.resolve()
-            }
-        } catch (e: GoogleMapsError) {
-            handleError(call, e)
-        } catch (e: Exception) {
-            handleError(call, e)
-        }
-    }
-
-    @PluginMethod
-    fun enableIndoorMaps(call: PluginCall) {
-        try {
-            val id = call.getString("id")
-            id ?: throw InvalidMapIdError()
-
-            val map = maps[id]
-            map ?: throw MapNotFoundError()
-
-            val enabled =
-                    call.getBoolean("enabled") ?: throw InvalidArgumentsError("enabled is missing")
-
-            map.enableIndoorMaps(enabled) { err ->
-                if (err != null) {
-                    throw err
-                }
-
-                call.resolve()
-            }
-        } catch (e: GoogleMapsError) {
-            handleError(call, e)
-        } catch (e: Exception) {
-            handleError(call, e)
-        }
-    }
-
-    @PluginMethod
-    fun enableTrafficLayer(call: PluginCall) {
-        try {
-            val id = call.getString("id")
-            id ?: throw InvalidMapIdError()
-
-            val map = maps[id]
-            map ?: throw MapNotFoundError()
-
-            val enabled =
-                    call.getBoolean("enabled") ?: throw InvalidArgumentsError("enabled is missing")
-
-            map.enableTrafficLayer(enabled) { err ->
-                if (err != null) {
-                    throw err
-                }
-
-                call.resolve()
-            }
-        } catch (e: GoogleMapsError) {
-            handleError(call, e)
-        } catch (e: Exception) {
-            handleError(call, e)
-        }
-    }
-
-    @PluginMethod
-    fun enableCurrentLocation(call: PluginCall) {
-        if (getPermissionState(LOCATION) != PermissionState.GRANTED) {
-            requestAllPermissions(call, "enableCurrentLocationCallback")
-        } else {
-            internalEnableCurrentLocation(call)
-        }
-    }
-
-    @PermissionCallback
-    fun enableCurrentLocationCallback(call: PluginCall) {
-        if (getPermissionState(LOCATION) == PermissionState.GRANTED) {
-            internalEnableCurrentLocation(call)
-        } else {
-            call.reject("location permission was denied")
-        }
-    }
-
-    @PluginMethod
-    fun setPadding(call: PluginCall) {
-        try {
-            val id = call.getString("id")
-            id ?: throw InvalidMapIdError()
-
-            val map = maps[id]
-            map ?: throw MapNotFoundError()
-
-            val paddingObj =
-                    call.getObject("padding") ?: throw InvalidArgumentsError("padding is missing")
-
-            val padding = GoogleMapPadding(paddingObj)
-
-            map.setPadding(padding) { err ->
-                if (err != null) {
-                    throw err
-                }
-
-                call.resolve()
-            }
-        } catch (e: GoogleMapsError) {
-            handleError(call, e)
-        } catch (e: Exception) {
-            handleError(call, e)
-        }
-    }
-
-    @PluginMethod
-    fun enableAccessibilityElements(call: PluginCall) {
-        call.unavailable("this call is not available on android")
     }
 
     @PluginMethod
@@ -884,11 +899,12 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
                 while(events.size > 0) {
                     val event = events.first()
                     if (focus) {
+                        checkHasTouchStartedOnMap(event, true)
                         map.dispatchTouchEvent(event)
                     } else {
                         this.bridge.webView.onTouchEvent(event)
                     }
-                    events.removeFirst()
+                    events.removeAt(0)
                 }
             }
 
@@ -989,6 +1005,22 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
         }
     }
 
+    private fun checkHasTouchStartedOnMap(event: MotionEvent, force: Boolean = false) {
+        if (event.action == MotionEvent.ACTION_MOVE && (!hasTouchStartedOnMap || force)) {
+            hasTouchStartedOnMap = true
+            this.bridge.webView?.onTouchEvent(
+                MotionEvent.obtain(
+                    event.downTime,
+                    event.eventTime,
+                    MotionEvent.ACTION_CANCEL,
+                    event.x,
+                    event.y,
+                    event.metaState
+                )
+            )
+        }
+    }
+
     private fun createLatLng(point: JSObject): LatLng {
         return LatLng(
             point.getDouble("lat"),
@@ -1004,31 +1036,6 @@ class CapacitorGoogleMapsPlugin : Plugin(), OnMapsSdkInitializedCallback {
         val northeastLatLng = createLatLng(northeastObject)
 
         return LatLngBounds(southwestLatLng, northeastLatLng)
-    }
-
-    private fun internalEnableCurrentLocation(call: PluginCall) {
-        try {
-            val id = call.getString("id")
-            id ?: throw InvalidMapIdError()
-
-            val map = maps[id]
-            map ?: throw MapNotFoundError()
-
-            val enabled =
-                    call.getBoolean("enabled") ?: throw InvalidArgumentsError("enabled is missing")
-
-            map.enableCurrentLocation(enabled) { err ->
-                if (err != null) {
-                    throw err
-                }
-
-                call.resolve()
-            }
-        } catch (e: GoogleMapsError) {
-            handleError(call, e)
-        } catch (e: Exception) {
-            handleError(call, e)
-        }
     }
 
     fun notify(event: String, data: JSObject) {
