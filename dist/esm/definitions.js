@@ -23,6 +23,20 @@ export class LatLngBounds {
         return this;
     }
 }
+/**
+ * Feature types
+ */
+export var FeatureType;
+(function (FeatureType) {
+    /**
+     * Default
+     */
+    FeatureType["Default"] = "Default";
+    /**
+     * GeoJSON
+     */
+    FeatureType["GeoJSON"] = "GeoJSON";
+})(FeatureType || (FeatureType = {}));
 export var MapType;
 (function (MapType) {
     /**

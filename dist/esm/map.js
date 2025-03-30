@@ -21,6 +21,7 @@ export class GoogleMap {
     constructor(id) {
         this.element = null;
         this.resizeObserver = null;
+        this.config = null;
         this.handleScrollEvent = () => this.updateMapBounds();
         this.id = id;
     }
@@ -32,6 +33,7 @@ export class GoogleMap {
      */
     static async create(options, callback) {
         const newMap = new GoogleMap(options.id);
+        newMap.config = options.config;
         if (!options.element) {
             throw new Error('container element is required');
         }
@@ -171,6 +173,31 @@ export class GoogleMap {
         });
     }
     /**
+     * Update map options
+     *
+     * @returns void
+     */
+    async update(config) {
+        var _a, _b;
+        Object.assign(this.config, config);
+        // Convert restriction latLngBounds to LatLngBoundsLiteral if its in LatLngBounds format
+        if (((_a = config.restriction) === null || _a === void 0 ? void 0 : _a.latLngBounds) && ((_b = config.restriction.latLngBounds) === null || _b === void 0 ? void 0 : _b.toJSON)) {
+            config.restriction.latLngBounds = config.restriction.latLngBounds.toJSON();
+        }
+        return CapacitorGoogleMaps.update({
+            id: this.id,
+            config,
+        });
+    }
+    /**
+     * Get map options
+     *
+     * @returns void
+     */
+    getOptions() {
+        return this.config;
+    }
+    /**
      * Enable touch events on native map
      *
      * @returns void
@@ -303,6 +330,29 @@ export class GoogleMap {
             polylineIds: ids,
         });
     }
+    async addFeatures(type, data, idPropertyName, styles) {
+        const res = await CapacitorGoogleMaps.addFeatures({
+            id: this.id,
+            type,
+            data,
+            idPropertyName,
+            styles,
+        });
+        return res.ids;
+    }
+    async getFeatureBounds(id) {
+        const res = await CapacitorGoogleMaps.getFeatureBounds({
+            id: this.id,
+            featureId: id,
+        });
+        return new LatLngBounds(res.bounds);
+    }
+    async removeFeature(id) {
+        return CapacitorGoogleMaps.removeFeature({
+            id: this.id,
+            featureId: id,
+        });
+    }
     /**
      * Destroy the current instance of the map
      */
@@ -331,48 +381,61 @@ export class GoogleMap {
             config,
         });
     }
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     async getMapType() {
-        const { type } = await CapacitorGoogleMaps.getMapType({ id: this.id });
-        return MapType[type];
+        var _a;
+        return Promise.resolve(MapType[(_a = this.getOptions()) === null || _a === void 0 ? void 0 : _a.mapTypeId]);
     }
     /**
      * Sets the type of map tiles that should be displayed.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param mapType
      * @returns
      */
     async setMapType(mapType) {
-        return CapacitorGoogleMaps.setMapType({
+        return CapacitorGoogleMaps.update({
             id: this.id,
-            mapType,
+            config: {
+                mapTypeId: mapType,
+            },
         });
     }
     /**
      * Sets whether indoor maps are shown, where available.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param enabled
      * @returns
      */
     async enableIndoorMaps(enabled) {
-        return CapacitorGoogleMaps.enableIndoorMaps({
+        return CapacitorGoogleMaps.update({
             id: this.id,
-            enabled,
+            config: {
+                isIndoorMapsEnabled: enabled,
+            },
         });
     }
     /**
      * Controls whether the map is drawing traffic data, if available.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param enabled
      * @returns
      */
     async enableTrafficLayer(enabled) {
-        return CapacitorGoogleMaps.enableTrafficLayer({
+        return CapacitorGoogleMaps.update({
             id: this.id,
-            enabled,
+            config: {
+                isTrafficLayerEnabled: enabled,
+            },
         });
     }
     /**
      * Show accessibility elements for overlay objects, such as Marker and Polyline.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * Only available on iOS.
      *
@@ -380,33 +443,41 @@ export class GoogleMap {
      * @returns
      */
     async enableAccessibilityElements(enabled) {
-        return CapacitorGoogleMaps.enableAccessibilityElements({
+        return CapacitorGoogleMaps.update({
             id: this.id,
-            enabled,
+            config: {
+                isAccessibilityElementsEnabled: enabled,
+            },
         });
     }
     /**
      * Set whether the My Location dot and accuracy circle is enabled.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param enabled
      * @returns
      */
     async enableCurrentLocation(enabled) {
-        return CapacitorGoogleMaps.enableCurrentLocation({
+        return CapacitorGoogleMaps.update({
             id: this.id,
-            enabled,
+            config: {
+                isMyLocationEnabled: enabled,
+            },
         });
     }
     /**
      * Set padding on the 'visible' region of the view.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param padding
      * @returns
      */
     async setPadding(padding) {
-        return CapacitorGoogleMaps.setPadding({
+        return CapacitorGoogleMaps.update({
             id: this.id,
-            padding,
+            config: {
+                padding,
+            },
         });
     }
     /**

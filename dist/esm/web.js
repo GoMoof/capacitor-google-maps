@@ -1,6 +1,14 @@
 import { WebPlugin } from '@capacitor/core';
 import { MarkerClusterer, SuperClusterAlgorithm } from '@googlemaps/markerclusterer';
-import { MapType, LatLngBounds } from './definitions';
+import { FeatureType, LatLngBounds } from './definitions';
+class MapInstance {
+    constructor() {
+        this.markers = {};
+        this.polygons = {};
+        this.circles = {};
+        this.polylines = {};
+    }
+}
 export class CapacitorGoogleMapsWeb extends WebPlugin {
     constructor() {
         super(...arguments);
@@ -63,12 +71,10 @@ export class CapacitorGoogleMapsWeb extends WebPlugin {
             const loader = new lib.Loader({
                 apiKey: apiKey !== null && apiKey !== void 0 ? apiKey : '',
                 version: 'weekly',
-                libraries: ['places'],
                 language,
                 region,
             });
-            const google = await loader.load();
-            this.gMapsRef = google.maps;
+            this.gMapsRef = await loader.importLibrary('maps');
             // Import marker library once
             const { AdvancedMarkerElement, PinElement } = (await google.maps.importLibrary('marker'));
             this.AdvancedMarkerElement = AdvancedMarkerElement;
@@ -91,69 +97,8 @@ export class CapacitorGoogleMapsWeb extends WebPlugin {
             zoom: _args.config.zoom,
         });
     }
-    async getMapType(_args) {
-        let type = this.maps[_args.id].map.getMapTypeId();
-        if (type !== undefined) {
-            if (type === 'roadmap') {
-                type = MapType.Normal;
-            }
-            return { type: `${type.charAt(0).toUpperCase()}${type.slice(1)}` };
-        }
-        throw new Error('Map type is undefined');
-    }
-    async setMapType(_args) {
-        let mapType = _args.mapType.toLowerCase();
-        if (_args.mapType === MapType.Normal) {
-            mapType = 'roadmap';
-        }
-        this.maps[_args.id].map.setMapTypeId(mapType);
-    }
-    async enableIndoorMaps() {
-        throw new Error('Method not supported on web.');
-    }
-    async enableTrafficLayer(_args) {
-        var _a;
-        const trafficLayer = (_a = this.maps[_args.id].trafficLayer) !== null && _a !== void 0 ? _a : new google.maps.TrafficLayer();
-        if (_args.enabled) {
-            trafficLayer.setMap(this.maps[_args.id].map);
-            this.maps[_args.id].trafficLayer = trafficLayer;
-        }
-        else if (this.maps[_args.id].trafficLayer) {
-            trafficLayer.setMap(null);
-            this.maps[_args.id].trafficLayer = undefined;
-        }
-    }
-    async enableAccessibilityElements() {
-        throw new Error('Method not supported on web.');
-    }
     dispatchMapEvent() {
         throw new Error('Method not supported on web.');
-    }
-    async enableCurrentLocation(_args) {
-        if (_args.enabled) {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const pos = {
-                        lat: position.coords.latitude,
-                        lng: position.coords.longitude,
-                    };
-                    this.maps[_args.id].map.setCenter(pos);
-                    this.notifyListeners('onMyLocationButtonClick', {});
-                    this.notifyListeners('onMyLocationClick', {});
-                }, () => {
-                    throw new Error('Geolocation not supported on web browser.');
-                });
-            }
-            else {
-                throw new Error('Geolocation not supported on web browser.');
-            }
-        }
-    }
-    async setPadding(_args) {
-        const bounds = this.maps[_args.id].map.getBounds();
-        if (bounds !== undefined) {
-            this.maps[_args.id].map.fitBounds(bounds, _args.padding);
-        }
     }
     async getMapBounds(_args) {
         const bounds = this.maps[_args.id].map.getBounds();
@@ -282,6 +227,66 @@ export class CapacitorGoogleMapsWeb extends WebPlugin {
             delete map.polylines[id];
         }
     }
+    async addFeatures(args) {
+        const featureIds = [];
+        const map = this.maps[args.id];
+        if (args.type === FeatureType.GeoJSON) {
+            featureIds.push(...map.map.data
+                .addGeoJson(args.data, args.idPropertyName ? { idPropertyName: args.idPropertyName } : null)
+                .map((f) => f.getId())
+                .filter((f) => f !== undefined)
+                .map((f) => f === null || f === void 0 ? void 0 : f.toString()));
+        }
+        else {
+            const featureId = map.map.data.add(args.data).getId();
+            if (featureId) {
+                featureIds.push(featureId.toString());
+            }
+        }
+        if (args.styles) {
+            map.map.data.setStyle((feature) => {
+                var _a;
+                const featureId = feature.getId();
+                return featureId ? (_a = args.styles) === null || _a === void 0 ? void 0 : _a[featureId] : null;
+            });
+        }
+        return {
+            ids: featureIds,
+        };
+    }
+    async getFeatureBounds(args) {
+        var _a;
+        if (!args.featureId) {
+            throw new Error('Feature id not set.');
+        }
+        const map = this.maps[args.id];
+        const feature = map.map.data.getFeatureById(args.featureId);
+        if (!feature) {
+            throw new Error(`Feature '${args.featureId}' could not be found.`);
+        }
+        const bounds = new google.maps.LatLngBounds();
+        (_a = feature === null || feature === void 0 ? void 0 : feature.getGeometry()) === null || _a === void 0 ? void 0 : _a.forEachLatLng((latLng) => {
+            bounds.extend(latLng);
+        });
+        return {
+            bounds: new LatLngBounds({
+                southwest: bounds.getSouthWest().toJSON(),
+                center: bounds.getCenter().toJSON(),
+                northeast: bounds.getNorthEast().toJSON(),
+            }),
+        };
+    }
+    async removeFeature(args) {
+        if (!args.featureId) {
+            throw new Error('Feature id not set.');
+        }
+        const map = this.maps[args.id];
+        const feature = map.map.data.getFeatureById(args.featureId);
+        if (!feature) {
+            throw new Error(`Feature '${args.featureId}' could not be found.`);
+        }
+        map.map.data.remove(feature);
+    }
     async enableClustering(_args) {
         var _a;
         const markers = [];
@@ -325,7 +330,7 @@ export class CapacitorGoogleMapsWeb extends WebPlugin {
         if (!config.mapId) {
             config.mapId = `capacitor_map_${this.currMapId++}`;
         }
-        this.maps[_args.id] = {
+        const mapInstance = {
             map: new window.google.maps.Map(_args.element, config),
             element: _args.element,
             markers: {},
@@ -333,7 +338,67 @@ export class CapacitorGoogleMapsWeb extends WebPlugin {
             circles: {},
             polylines: {},
         };
+        this.applyConfig(mapInstance, config);
+        this.maps[_args.id] = mapInstance;
         this.setMapListeners(_args.id);
+    }
+    async update(_args) {
+        const mapInstance = this.maps[_args.id];
+        mapInstance.map.setOptions(_args.config);
+        this.applyConfig(mapInstance, _args.config);
+    }
+    applyConfig(mapInstance, config) {
+        if (config.isMyLocationEnabled) {
+            this.enableMyLocation(mapInstance);
+        }
+        if (config.isTrafficLayerEnabled !== undefined) {
+            this.setTrafficLayer(mapInstance, config.isTrafficLayerEnabled);
+        }
+        if (config.mapTypeId !== undefined) {
+            this.setMapTypeId(mapInstance, config.mapTypeId);
+        }
+        if (config.padding !== undefined) {
+            this.setPadding(mapInstance, config.padding);
+        }
+    }
+    enableMyLocation(mapInstance) {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                const pos = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+                mapInstance.map.setCenter(pos);
+                this.notifyListeners('onMyLocationButtonClick', {});
+                this.notifyListeners('onMyLocationClick', {});
+            }, () => {
+                throw new Error('Geolocation not supported on web browser.');
+            });
+        }
+        else {
+            throw new Error('Geolocation not supported on web browser.');
+        }
+    }
+    setTrafficLayer(mapInstance, enabled) {
+        var _a;
+        const trafficLayer = (_a = mapInstance.trafficLayer) !== null && _a !== void 0 ? _a : new google.maps.TrafficLayer();
+        if (enabled) {
+            trafficLayer.setMap(mapInstance.map);
+            mapInstance.trafficLayer = trafficLayer;
+        }
+        else if (mapInstance.trafficLayer) {
+            trafficLayer.setMap(null);
+            mapInstance.trafficLayer = undefined;
+        }
+    }
+    setMapTypeId(mapInstance, typeId) {
+        mapInstance.map.setMapTypeId(typeId);
+    }
+    setPadding(mapInstance, padding) {
+        const bounds = mapInstance.map.getBounds();
+        if (bounds !== undefined) {
+            mapInstance.map.fitBounds(bounds, padding);
+        }
     }
     async destroy(_args) {
         console.log(`Destroy map: ${_args.id}`);

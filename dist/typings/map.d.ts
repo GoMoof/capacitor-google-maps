@@ -1,8 +1,10 @@
-import type { CameraConfig, Marker, MapPadding, MapListenerCallback, MapReadyCallbackData, CameraIdleCallbackData, CameraMoveStartedCallbackData, ClusterClickCallbackData, MapClickCallbackData, MarkerClickCallbackData, MyLocationButtonClickCallbackData, Polygon, PolygonClickCallbackData, Circle, CircleClickCallbackData, Polyline, PolylineCallbackData } from './definitions';
+import type { CameraConfig, Marker, MapPadding, MapListenerCallback, MapReadyCallbackData, CameraIdleCallbackData, CameraMoveStartedCallbackData, ClusterClickCallbackData, MapClickCallbackData, MarkerClickCallbackData, MyLocationButtonClickCallbackData, Polygon, PolygonClickCallbackData, Circle, CircleClickCallbackData, Polyline, PolylineCallbackData, GoogleMapConfig, FeatureType, FeatureStyles } from './definitions';
 import { LatLngBounds, MapType } from './definitions';
 import type { CreateMapArgs } from './implementation';
 export interface GoogleMapInterface {
     create(options: CreateMapArgs, callback?: MapListenerCallback<MapReadyCallbackData>): Promise<GoogleMap>;
+    update(config: GoogleMapConfig): Promise<void>;
+    getOptions(): GoogleMapConfig | null;
     enableTouch(): Promise<void>;
     disableTouch(): Promise<void>;
     enableClustering(
@@ -21,17 +23,39 @@ export interface GoogleMapInterface {
     removeCircles(ids: string[]): Promise<void>;
     addPolylines(polylines: Polyline[]): Promise<string[]>;
     removePolylines(ids: string[]): Promise<void>;
+    addFeatures(type: FeatureType, data: any, idPropertyName?: string, styles?: FeatureStyles): Promise<string[]>;
+    getFeatureBounds(featureId: string): Promise<LatLngBounds>;
+    removeFeature(featureId: string): Promise<void>;
     destroy(): Promise<void>;
     setCamera(config: CameraConfig): Promise<void>;
     /**
      * Get current map type
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      */
     getMapType(): Promise<MapType>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     setMapType(mapType: MapType): Promise<void>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     enableIndoorMaps(enabled: boolean): Promise<void>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     enableTrafficLayer(enabled: boolean): Promise<void>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     enableAccessibilityElements(enabled: boolean): Promise<void>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     enableCurrentLocation(enabled: boolean): Promise<void>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     setPadding(padding: MapPadding): Promise<void>;
     /**
      * Get the map's current viewport latitude and longitude bounds.
@@ -66,6 +90,7 @@ export declare class GoogleMap {
     private id;
     private element;
     private resizeObserver;
+    private config;
     private onBoundsChangedListener?;
     private onCameraIdleListener?;
     private onCameraMoveStartedListener?;
@@ -91,6 +116,18 @@ export declare class GoogleMap {
      */
     static create(options: CreateMapArgs, callback?: MapListenerCallback<MapReadyCallbackData>): Promise<GoogleMap>;
     private static getElementBounds;
+    /**
+     * Update map options
+     *
+     * @returns void
+     */
+    update(config: GoogleMapConfig): Promise<void>;
+    /**
+     * Get map options
+     *
+     * @returns void
+     */
+    getOptions(): GoogleMapConfig | null;
     /**
      * Enable touch events on native map
      *
@@ -152,6 +189,9 @@ export declare class GoogleMap {
     addCircles(circles: Circle[]): Promise<string[]>;
     removeCircles(ids: string[]): Promise<void>;
     removePolylines(ids: string[]): Promise<void>;
+    addFeatures(type: FeatureType, data: any, idPropertyName?: string, styles?: FeatureStyles): Promise<string[]>;
+    getFeatureBounds(id: string): Promise<LatLngBounds>;
+    removeFeature(id: string): Promise<void>;
     /**
      * Destroy the current instance of the map
      */
@@ -163,9 +203,13 @@ export declare class GoogleMap {
      * @returns
      */
     setCamera(config: CameraConfig): Promise<void>;
+    /**
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
+     */
     getMapType(): Promise<MapType>;
     /**
      * Sets the type of map tiles that should be displayed.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param mapType
      * @returns
@@ -173,6 +217,7 @@ export declare class GoogleMap {
     setMapType(mapType: MapType): Promise<void>;
     /**
      * Sets whether indoor maps are shown, where available.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param enabled
      * @returns
@@ -180,6 +225,7 @@ export declare class GoogleMap {
     enableIndoorMaps(enabled: boolean): Promise<void>;
     /**
      * Controls whether the map is drawing traffic data, if available.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param enabled
      * @returns
@@ -187,6 +233,7 @@ export declare class GoogleMap {
     enableTrafficLayer(enabled: boolean): Promise<void>;
     /**
      * Show accessibility elements for overlay objects, such as Marker and Polyline.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * Only available on iOS.
      *
@@ -196,6 +243,7 @@ export declare class GoogleMap {
     enableAccessibilityElements(enabled: boolean): Promise<void>;
     /**
      * Set whether the My Location dot and accuracy circle is enabled.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param enabled
      * @returns
@@ -203,6 +251,7 @@ export declare class GoogleMap {
     enableCurrentLocation(enabled: boolean): Promise<void>;
     /**
      * Set padding on the 'visible' region of the view.
+     * @deprecated This method will be removed in v7. Use {@link #update()} instead.
      *
      * @param padding
      * @returns

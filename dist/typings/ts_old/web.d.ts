@@ -1,6 +1,6 @@
 import { WebPlugin } from '@capacitor/core';
 import { LatLngBounds } from './definitions';
-import { AddMarkerArgs, CameraArgs, AddMarkersArgs, CapacitorGoogleMapsPlugin, CreateMapArgs, CurrentLocArgs, DestroyMapArgs, MapTypeArgs, PaddingArgs, RemoveMarkerArgs, TrafficLayerArgs, RemoveMarkersArgs, MapBoundsContainsArgs, EnableClusteringArgs, FitBoundsArgs, MapBoundsExtendArgs, AddPolygonsArgs, RemovePolygonsArgs, AddCirclesArgs, RemoveCirclesArgs, AddPolylinesArgs, RemovePolylinesArgs } from './implementation';
+import { AddMarkerArgs, CameraArgs, AddMarkersArgs, CapacitorGoogleMapsPlugin, CreateMapArgs, DestroyMapArgs, RemoveMarkerArgs, RemoveMarkersArgs, MapBoundsContainsArgs, EnableClusteringArgs, FitBoundsArgs, MapBoundsExtendArgs, AddPolygonsArgs, RemovePolygonsArgs, AddCirclesArgs, RemoveCirclesArgs, AddPolylinesArgs, RemovePolylinesArgs, UpdateMapArgs, AddFeatureArgs, GetFeatureBoundsArgs, RemoveFeatureArgs } from './implementation';
 export declare class CapacitorGoogleMapsWeb extends WebPlugin implements CapacitorGoogleMapsPlugin {
     private gMapsRef;
     private AdvancedMarkerElement;
@@ -22,18 +22,7 @@ export declare class CapacitorGoogleMapsWeb extends WebPlugin implements Capacit
         id: string;
     }): Promise<void>;
     setCamera(_args: CameraArgs): Promise<void>;
-    getMapType(_args: {
-        id: string;
-    }): Promise<{
-        type: string;
-    }>;
-    setMapType(_args: MapTypeArgs): Promise<void>;
-    enableIndoorMaps(): Promise<void>;
-    enableTrafficLayer(_args: TrafficLayerArgs): Promise<void>;
-    enableAccessibilityElements(): Promise<void>;
     dispatchMapEvent(): Promise<void>;
-    enableCurrentLocation(_args: CurrentLocArgs): Promise<void>;
-    setPadding(_args: PaddingArgs): Promise<void>;
     getMapBounds(_args: {
         id: string;
     }): Promise<LatLngBounds>;
@@ -58,6 +47,13 @@ export declare class CapacitorGoogleMapsWeb extends WebPlugin implements Capacit
         ids: string[];
     }>;
     removePolylines(args: RemovePolylinesArgs): Promise<void>;
+    addFeatures(args: AddFeatureArgs): Promise<{
+        ids: string[];
+    }>;
+    getFeatureBounds(args: GetFeatureBoundsArgs): Promise<{
+        bounds: LatLngBounds;
+    }>;
+    removeFeature(args: RemoveFeatureArgs): Promise<void>;
     enableClustering(_args: EnableClusteringArgs): Promise<void>;
     disableClustering(_args: {
         id: string;
@@ -66,6 +62,12 @@ export declare class CapacitorGoogleMapsWeb extends WebPlugin implements Capacit
     onResize(): Promise<void>;
     onDisplay(): Promise<void>;
     create(_args: CreateMapArgs): Promise<void>;
+    update(_args: UpdateMapArgs): Promise<void>;
+    private applyConfig;
+    private enableMyLocation;
+    private setTrafficLayer;
+    private setMapTypeId;
+    private setPadding;
     destroy(_args: DestroyMapArgs): Promise<void>;
     mapBoundsContains(_args: MapBoundsContainsArgs): Promise<{
         contains: boolean;
